@@ -1,0 +1,1794 @@
+#include "GamePlayScene.h"
+#include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <commdlg.h>  // GetOpenFileName
+#pragma comment(lib, "comdlg32.lib")
+#include "EnemyDeathEffect.h"
+#include "bulletHitEffect.h"
+#include "ConditionUpEffect.h"
+#include "ImguiManager.h"
+#include "ParticleManager.h"
+#include "SceneManager.h"
+#include "ScoreManager.h"
+#include "TextureManager.h"
+#include <TeleportBomb.h>
+
+// =====================================================
+// 初期化
+// =====================================================
+
+// =====================================================
+// 初期化
+// =====================================================
+
+void GamePlayScene::Initialize(DirectXCommon* dxCommon,Input* input,Audio* audio){
+	dxCommon_ = dxCommon;
+	input_ = input;
+	audio_ = audio;
+
+	// ----- 描画共通設定 -----
+	spriteCommon_ = std::make_unique<SpriteCommon>();
+	spriteCommon_->Initialize(dxCommon_);
+
+	modelCommon_ = std::make_unique<ModelCommon>();
+	modelCommon_->Initialize(dxCommon_);
+
+	objectCommon_ = std::make_unique<Object3dCommon>();
+	objectCommon_->Initialize(dxCommon_);
+
+	shadowManager_ = std::make_unique<ShadowManager>();
+	shadowManager_->Initialize(dxCommon_,SrvManager::GetInstance());
+
+	buffManager_ = std::make_unique<BuffManager>();
+	buffManager_->Initialize(spriteCommon_.get());
+
+	collisionManager_ = std::make_unique<CollisionManager>();
+
+	// ----- カメラ -----
+	camera_ = std::make_unique<Camera>();
+	camera_->SetTranslate({14.5f, 6.0f, -30.0f});
+	Object3d::SetCommonCamera(camera_.get());
+
+	// ----- 音声・動画・アニメーション -----
+	bgmData_ = audio_->LoadAudio("Resources/music/461_BPM174.wav");
+
+	videoList_ = {
+		"Resources/movie/test.mp4",
+		"Resources/movie/test2.mp4"
+	};
+	currentVideoIndex_ = 0;
+	videoPlayer_ = std::make_unique<VideoPlayer>();
+	videoPlayer_->Initialize(dxCommon_,spriteCommon_.get(),videoList_[currentVideoIndex_]);
+
+	playerAnimation_ = LoadAnimationFile("Resources/AnimatedCube","AnimatedCube.gltf");
+
+	// ----- 背景・マップ -----
+	modelSkydome_ = std::make_unique<Model>();
+	modelSkydome_->Initialize(modelCommon_.get(),"Resources/SkyDome/SkyDome.obj","Resources/SkyDome/skySphere.png");
+	skydome_ = std::make_unique<Skydome>();
+	skydome_->Initialize(modelCommon_.get(),modelSkydome_.get());
+
+	modelBlock_ = std::make_unique<Model>();
+	modelBlock_->Initialize(modelCommon_.get(),"Resources/block/block.obj","Resources/block/block.png");
+
+	mapField_ = std::make_unique<MapChipField>();
+	mapField_->LoadMapFromCSV("Resources/map.csv");
+	mapField_->Initialize(modelCommon_.get(),{modelBlock_.get(), modelBlock_.get(), modelBlock_.get()});
+
+	// ----- キャラクター・オブジェクト -----
+	modelPlayer_ = std::make_unique<Model>();
+	modelPlayer_->Initialize(modelCommon_.get(),"Resources/player/player.obj","Resources/player/player.png");
+
+	modelEnemy_ = std::make_unique<Model>();
+	modelEnemy_->Initialize(modelCommon_.get(),"Resources/boss/boss.obj","Resources/boss/boss.png");
+
+	modelBullet_ = std::make_unique<Model>();
+	modelBullet_->Initialize(modelCommon_.get(),"Resources/plane/plane.obj","Resources/white.png");
+
+	modelBeam_ = std::make_unique<Model>();
+	modelBeam_->Initialize(modelCommon_.get(),"Resources/beam/beam.obj","Resources/beam/beam.png");
+
+	playerManager_ = std::make_unique<PlayerManager>();
+	playerManager_->Initialize(modelCommon_.get(),modelPlayer_.get(),input_,mapField_.get(),camera_.get());
+
+	enemyManager_ = std::make_unique<EnemyManager>();
+	enemyManager_->Initialize(modelCommon_.get(),modelEnemy_.get(),input_,modelBullet_.get(),mapField_.get());
+
+	Player* player = playerManager_->GetPlayer();
+	player->SetSpecialMoveModel(modelBeam_.get());
+	player->CreateBeamSpecial(modelBeam_.get(),modelCommon_.get());
+	player->SetEnemyManager(enemyManager_.get());
+
+	auto hoge = std::make_unique<Hoge>();
+	hoge->Initialize(dxCommon,input,audio);
+	gameObjects_.push_back(std::move(hoge));
+
+	// ----- 2D UI スプライト -----
+	sprite1_ = std::make_unique<Sprite>();
+	sprite1_->Initialize(spriteCommon_.get(),"Resources/uvChecker.png");
+	sprite1_->SetPosition({100.0f, 100.0f});
+
+	skyOverlay_ = std::make_unique<Sprite>();
+	skyOverlay_->Initialize(spriteCommon_.get(),"Resources/white.png");
+	skyOverlay_->SetPosition({0.0f, 0.0f});
+	skyOverlay_->SetSize({1280.0f, 720.0f});
+	skyOverlay_->SetColor({1.0f, 0.4f, 0.1f, 0.3f});
+
+	static const char* kSwipeUIPaths[4] = {
+		"Resources/UI/zeroThird.png",
+		"Resources/UI/oneThird.png",
+		"Resources/UI/twoThirds.png",
+		"Resources/UI/threeThirds.png",
+	};
+	for(int i = 0; i < 4; ++i){
+		swipeUI_[i] = std::make_unique<Sprite>();
+		swipeUI_[i]->Initialize(spriteCommon_.get(),kSwipeUIPaths[i]);
+		swipeUI_[i]->SetAnchorPoint({1.0f, 1.0f});
+		swipeUI_[i]->SetPosition({1280.0f, 720.0f});
+	}
+
+	// チュートリアルUI
+	skipUI_ = std::make_unique<Sprite>();
+	skipUI_->Initialize(spriteCommon_.get(),"Resources/Tutorial/SkipUI.png");
+	float skipW = 140.0f;
+	float skipH = 80.0f;
+	skipUI_->SetSize({skipW, skipH});
+	skipUI_->SetPosition({1280.0f - (skipW / 2.0f) - 80.0f, (skipH / 2.0f) - 20.0f});
+
+	moveUI_ = std::make_unique<Sprite>();
+	moveUI_->Initialize(spriteCommon_.get(),"Resources/Tutorial/MoveUI.png");
+
+	shootUI_ = std::make_unique<Sprite>();
+	shootUI_->Initialize(spriteCommon_.get(),"Resources/Tutorial/ShootUI.png");
+	shootGuide_ = std::make_unique<Sprite>();
+	shootGuide_->Initialize(spriteCommon_.get(),"Resources/Tutorial/ShootGuide.png");
+
+	scrollStartUI_ = std::make_unique<Sprite>();
+	scrollStartUI_->Initialize(spriteCommon_.get(),"Resources/Tutorial/ScrollStartUI.png");
+
+	battleTrainUI_ = std::make_unique<Sprite>();
+	battleTrainUI_->Initialize(spriteCommon_.get(),"Resources/Tutorial/BattleTrainUI.png");
+	battleTrainGuide_ = std::make_unique<Sprite>();
+	battleTrainGuide_->Initialize(spriteCommon_.get(),"Resources/Tutorial/BattleTrainGuide.png");
+
+	swipeTrainUI_ = std::make_unique<Sprite>();
+	swipeTrainUI_->Initialize(spriteCommon_.get(),"Resources/Tutorial/SwipeTrainUI.png");
+	swipeTrainGuide_ = std::make_unique<Sprite>();
+	swipeTrainGuide_->Initialize(spriteCommon_.get(),"Resources/Tutorial/SwipeTrainGuide.png");
+
+	specialMoveUI_ = std::make_unique<Sprite>();
+	specialMoveUI_->Initialize(spriteCommon_.get(),"Resources/Tutorial/SpecialMoveUI.png");
+	specialMoveGuide_ = std::make_unique<Sprite>();
+	specialMoveGuide_->Initialize(spriteCommon_.get(),"Resources/Tutorial/SpecialMoveGuide.png");
+
+	epilogueUI_ = std::make_unique<Sprite>();
+	epilogueUI_->Initialize(spriteCommon_.get(),"Resources/Tutorial/EpilogueUI.png");
+
+
+	// P5R風に、お題として目立つサイズに設定
+	float moveW = 500.0f; // 少し大きめに
+	float moveH = 150.0f;
+	moveUI_->SetSize({moveW, moveH});
+
+	// 画面中央の少し上に配置して「お題」であることを強調
+	moveUI_->SetPosition({900.0f / 2.0f, 100.0f});
+	moveUI_->Update();
+
+	moveGuide_ = std::make_unique<Sprite>();
+	moveGuide_->Initialize(spriteCommon_.get(),"Resources/Tutorial/MoveGuide.png");
+
+	fade_.Initialize(spriteCommon_.get());
+	fade_.Start(Fade::Status::FadeIn,3.0f);
+
+	// 各種表示マネージャー
+	pauseScene_.Initialize(spriteCommon_.get());
+	timeDisplay_.Initialize(spriteCommon_.get());
+	scoreDisplay_.Initialize(spriteCommon_.get());
+	emojiUI_.Initialize(modelCommon_.get());
+	enemyManager_->SetSpriteCommonAndInitIcons(spriteCommon_.get());
+
+	// ----- 雲の初期化 -----
+	struct CloudInitParam{ float x,y,speed,w,h; };
+	static constexpr CloudInitParam kCloudParams[] = {
+		{   0.0f,  30.0f, 0.4f, 260.0f, 110.0f },
+		{ 320.0f,  80.0f, 0.6f, 200.0f,  90.0f },
+		{ 600.0f,  20.0f, 0.3f, 300.0f, 120.0f },
+		{ 850.0f,  60.0f, 0.7f, 180.0f,  80.0f },
+		{1050.0f,  40.0f, 0.5f, 240.0f, 100.0f },
+		{ 160.0f, 140.0f, 0.35f,220.0f,  95.0f },
+		{ 720.0f, 120.0f, 0.55f,190.0f,  85.0f },
+	};
+	for(const auto& p : kCloudParams){
+		CloudData cloud;
+		cloud.sprite = std::make_unique<Sprite>();
+		cloud.sprite->Initialize(spriteCommon_.get(),"Resources/cloud/cloud.png");
+		cloud.posX = p.x;
+		cloud.posY = p.y;
+		cloud.speed = p.speed;
+		cloud.width = p.w;
+		cloud.height = p.h;
+		cloud.sprite->SetPosition({cloud.posX, cloud.posY});
+		cloud.sprite->SetSize({cloud.width, cloud.height});
+		cloud.sprite->Update();
+		clouds_.push_back(std::move(cloud));
+	}
+
+	// ----- エフェクト・進行管理 -----
+	ParticleManager::GetInstance()->SetModel(modelBullet_.get());
+	EnemyDeathEffect::CreateGroup();
+	BulletHitEffect::CreateGroup();
+	ConditionUpEffect::CreateGroup();
+
+	ScoreManager::GetInstance()->LoadScores();
+	ScoreManager::GetInstance()->ResetCurrentScore();
+	gameTime_.Initialize();
+
+	// ----- デバッグパラメータ読み込み -----
+	LoadCameraParams();
+	LoadEnemyParams();
+	LoadModelPaths();
+	LoadTurretData();
+	LoadUILayout();
+}
+
+/// <summary>
+/// 更新処理
+/// </summary>
+
+void GamePlayScene::Update(){
+	// ポーズ切り替え（Tabキー）
+	if(input_->TriggerKey(DIK_TAB)){
+		isPaused_ = !isPaused_;
+		if(isPaused_){
+			pauseScene_.Open();
+		}
+	}
+
+	if(isPaused_){
+		PauseScene::Result result = pauseScene_.Update(input_);
+		if(result == PauseScene::Result::Continue){
+			isPaused_ = false;
+		} else if(result == PauseScene::Result::GoTitle){
+			SceneManager::GetInstance()->ChangeScene("TITLE");
+		}
+		return;
+	}
+
+	// チュートリアルの更新
+	if(isTutorialActive_){
+		UpdateTutorial();
+	}
+
+	// ゲーム内時刻の更新
+	Condition::ConditionType prevCondition = playerManager_->GetPlayer()->GetCondition()->GetCondition();
+	Condition::ConditionType currentCondition = prevCondition;
+
+	if(!isTutorialActive_){
+		gameTime_.Update(currentCondition);
+	}
+
+	// 6:00 でクリアシーンへ
+	if(gameTime_.IsCleared()){
+		SceneManager::GetInstance()->ChangeScene("CLEAR");
+		return;
+	}
+
+	// スクロール速度と進行度の計算
+	float timeRatio = gameTime_.GetElapsedMinutes() / GameTime::kTotalGameMinutes;
+	float scrollMultiplier = debugScrollPaused_?0.0f:playerManager_->GetScrollSpeedMultiplier();
+
+	if(isTutorialActive_){
+		if(tutorialStep_ == TutorialStep::Move || tutorialStep_ == TutorialStep::Shoot){
+			scrollMultiplier = 0.0f;
+		}
+	}
+
+	enemyManager_->SetDebugSpawnDisabled(debugSpawnDisabled_ || (isTutorialActive_ && tutorialStep_ == TutorialStep::Move));
+	float cameraPosX = camera_->GetTranslate().x;
+
+	// ライト・シャドウの更新
+	objectCommon_->UpdateLight(timeRatio);
+	shadowManager_->Update(objectCommon_->GetLightDirection());
+	Object3d::SetLightViewProjection(shadowManager_->GetLightViewProjection());
+
+	// バフマネージャーの更新
+	buffManager_->Update(input_);
+
+	// バフ選択中はゲームロジックを止める
+	if(buffManager_->IsSelecting()){
+		return;
+	}
+
+	// 雲の更新
+	for(auto& cloud : clouds_){
+		cloud.posX -= cloud.speed;
+		if(cloud.posX + cloud.width < 0.0f){
+			cloud.posX = 1280.0f;
+		}
+		cloud.sprite->SetPosition({cloud.posX, cloud.posY});
+		cloud.sprite->Update();
+	}
+
+	// 調子に応じたウェーブ強度の設定
+	float waveStrength = 0.0f;
+	if(currentCondition == Condition::ConditionType::Excellent){
+		waveStrength = 0.0f;
+	} else if(currentCondition == Condition::ConditionType::Good){
+		waveStrength = 0.0f;
+	}
+
+	// 各オブジェクトの更新
+	skydome_->Update(camera_.get(),timeRatio);
+	mapField_->SetTerribleMode(currentCondition == Condition::ConditionType::Terrible);
+	mapField_->Update(scrollMultiplier,waveStrength);
+	playerManager_->Update(cameraPosX);
+
+	// バフの準備完了チェック
+	if(playerManager_->GetPlayer()->IsBuffReady() && !buffManager_->IsSelecting()){
+		buffManager_->TriggerSelection();
+		playerManager_->GetPlayer()->ResetBuffReady();
+	}
+
+	enemyManager_->Update(camera_.get(),bullets_,playerManager_->GetPlayer(),scrollMultiplier);
+
+	// プレイヤーのアニメーション更新
+	animationTime_ = std::fmod(animationTime_,playerAnimation_.duration);
+	NodeAnimation& rootAnim = playerAnimation_.nodeAnimations["AnimatedCube"];
+	Matrix4x4 localMatrix = MakeAffineMatrix(
+		CalculateValue(rootAnim.scale,animationTime_),
+		CalculateValue(rootAnim.rotate,animationTime_),
+		CalculateValue(rootAnim.translate,animationTime_)
+	);
+	playerManager_->GetPlayer()->SetAnimationMatrix(localMatrix);
+
+	// 弾の発射処理（バフ効果を反映）
+	auto fireBullets = [&](float baseVelX){
+		const BuffEffect& buff = buffManager_->GetEffect();
+		float vx = baseVelX * buff.bulletSpeedMultiplier;
+
+		auto bullet = Bullet::Create(modelCommon_.get(),modelBullet_.get(),
+			playerManager_->GetPlayer()->GetPosition(),{vx, 0.0f, 0.0f});
+
+		bullet->SetOwner(BulletOwner::Player);
+		bullet->SetBulletScale(0.5f * buff.bulletScaleMultiplier);
+		bullets_.push_back(std::move(bullet));
+		};
+
+	bool holdRight = input_->PushButton(XINPUT_GAMEPAD_B) || (GetAsyncKeyState(VK_LBUTTON) & 0x8000);
+	bool trigRight = input_->TriggerMouseButton(0) || input_->TriggerButton(XINPUT_GAMEPAD_B);
+	bool holdLeft = input_->PushButton(XINPUT_GAMEPAD_X) || (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
+	bool trigLeft = input_->TriggerMouseButton(1) || input_->TriggerButton(XINPUT_GAMEPAD_X);
+
+	const int rapidInterval = buffManager_->GetEffect().rapidFireInterval;
+
+	if(rapidInterval > 0){
+		if(holdRight || holdLeft){
+			rapidFireTimer_--;
+			if(rapidFireTimer_ <= 0){
+				rapidFireTimer_ = rapidInterval;
+				if(holdRight){ fireBullets(0.3f); }
+				if(holdLeft){ fireBullets(-0.3f); }
+			}
+		} else{
+			rapidFireTimer_ = 0;
+		}
+	} else{
+		if(trigRight){ fireBullets(0.3f); }
+		if(trigLeft){ fireBullets(-0.3f); }
+	}
+
+	// 弾の更新・削除
+	for(auto it = bullets_.begin(); it != bullets_.end();){
+		(*it)->Update();
+		if((*it)->IsDead()){
+			it = bullets_.erase(it);
+		} else{
+			++it;
+		}
+	}
+
+	// 弾とブロックの衝突判定
+	if(mapField_){
+		const float kBlockHalf = 0.5f;
+		auto checkBulletVsBlocks = [&](Bullet* bullet){
+			if(bullet->IsDead()) return;
+
+			for(const auto& chip : mapField_->GetMapChips()){
+				Vector3 bp = chip->GetTransform().translate;
+				AABB blockAABB = {
+					{ bp.x - kBlockHalf, bp.y - kBlockHalf, bp.z - kBlockHalf },
+					{ bp.x + kBlockHalf, bp.y + kBlockHalf, bp.z + kBlockHalf }
+				};
+
+				if(Collision::CheckCollision(bullet->GetCollider().aabb,blockAABB)){
+					BulletHitEffect::Emit(bullet->GetPosition());
+					bullet->OnCollision();
+					break;
+				}
+			}
+			};
+
+		for(auto& bullet : bullets_){
+			checkBulletVsBlocks(bullet.get());
+		}
+		for(auto& enemy : enemyManager_->GetEnemies()){
+			for(auto& bullet : enemy->GetBullets()){
+				checkBulletVsBlocks(bullet.get());
+			}
+		}
+	}
+
+	// テレポートボムとブロックの衝突判定
+	auto* teleportBomb = playerManager_->GetPlayer()->GetTeleportBomb();
+	if(teleportBomb && teleportBomb->IsProjectileFlying()){
+		Vector3 pPos = teleportBomb->GetProjectilePos();
+		const float kBlockHalf = 0.5f;
+		const float kBombHalf = 0.2f;
+
+		AABB bombAABB = {
+			{ pPos.x - kBombHalf, pPos.y - kBombHalf, pPos.z - kBombHalf },
+			{ pPos.x + kBombHalf, pPos.y + kBombHalf, pPos.z + kBombHalf }
+		};
+
+		for(const auto& chip : mapField_->GetMapChips()){
+			Vector3 bp = chip->GetTransform().translate;
+			AABB blockAABB = {
+				{ bp.x - kBlockHalf, bp.y - kBlockHalf, bp.z - kBlockHalf },
+				{ bp.x + kBlockHalf, bp.y + kBlockHalf, bp.z + kBlockHalf }
+			};
+
+			if(Collision::CheckCollision(bombAABB,blockAABB)){
+				teleportBomb->OnCollisionBlock();
+				break;
+			}
+		}
+	}
+
+	// キャラクターの衝突判定
+	collisionManager_->ClearPairs();
+	for(const auto& block : mapField_->GetMapChips()){
+		collisionManager_->AddCollisionPair(playerManager_->GetPlayer(),block.get());
+	}
+
+	playerManager_->GetPlayer()->CheckBulletHit(bullets_);
+	for(auto& enemy : enemyManager_->GetEnemies()){
+		playerManager_->GetPlayer()->CheckBulletHit(enemy->GetBullets());
+	}
+
+	collisionManager_->UpdateAllCollisions();
+	playerManager_->GetPlayer()->OnCollision();
+
+	// プレイヤー死亡チェック
+	if(playerManager_->GetPlayer()->IsDead()){
+		SceneManager::GetInstance()->ChangeScene("GAMEOVER");
+		return;
+	}
+
+	// 動画切り替え（スワイプ成功時のみ・ストックとリンク）
+	if(playerManager_->GetPlayer()->ConsumeSwipeFired() && !videoList_.empty()){
+		currentVideoIndex_ = (currentVideoIndex_ + 1) % (int)videoList_.size();
+		Vector2 pos = videoPlayer_->GetPosition();
+		Vector2 size = videoPlayer_->GetSize();
+
+		videoPlayer_->Finalize();
+		videoPlayer_ = std::make_unique<VideoPlayer>();
+		videoPlayer_->Initialize(dxCommon_,spriteCommon_.get(),videoList_[currentVideoIndex_]);
+		videoPlayer_->SetPosition(pos);
+		videoPlayer_->SetSize(size);
+
+		videoSwitchCount_++;
+	}
+
+	// ゲームオブジェクトの更新
+	for(auto& obj : gameObjects_){
+		obj->Update();
+	}
+
+	// タレット召喚（R キー）
+	if(input_->TriggerKey(DIK_R)){
+		auto turret = std::make_unique<Turret>();
+		turret->Initialize(modelCommon_.get(),modelBullet_.get(),modelBullet_.get(),
+			playerManager_->GetPlayer()->GetPosition(),enemyManager_.get());
+
+		turrets_.push_back(std::move(turret));
+		turretNames_.push_back("Turret");
+	}
+
+	// タレット更新・削除
+	for(auto& turret : turrets_){
+		turret->Update(bullets_);
+	}
+
+	for(int i = (int)turrets_.size() - 1; i >= 0; --i){
+		if(turrets_[i]->IsDead()){
+			turrets_.erase(turrets_.begin() + i);
+			if(i < (int)turretNames_.size()){
+				turretNames_.erase(turretNames_.begin() + i);
+			}
+
+			if(editorSelectedType_ == SelectedType::Turret){
+				if(editorSelectedIndex_ == i){
+					editorSelectedType_ = SelectedType::None;
+					editorSelectedIndex_ = -1;
+				} else if(editorSelectedIndex_ > i){
+					editorSelectedIndex_--;
+				}
+			}
+		}
+	}
+
+	// タレットとブロックの押し出し衝突
+	if(mapField_){
+		const float kBlockHalf = 0.5f;
+		for(auto& turret : turrets_){
+			if(turret->IsDead()) continue;
+
+			for(const auto& chip : mapField_->GetMapChips()){
+				Vector3 tPos = turret->GetPosition();
+				Vector3 bPos = chip->GetTransform().translate;
+
+				float overlapX = (Turret::kHalfSize + kBlockHalf) - std::abs(tPos.x - bPos.x);
+				float overlapY = (Turret::kHalfSize + kBlockHalf) - std::abs(tPos.y - bPos.y);
+
+				if(overlapX > 0.0f && overlapY > 0.0f){
+					if(overlapX < overlapY){
+						tPos.x += (tPos.x > bPos.x)?overlapX:-overlapX;
+					} else{
+						tPos.y += (tPos.y > bPos.y)?overlapY:-overlapY;
+					}
+					turret->SetPosition(tPos);
+				}
+			}
+		}
+	}
+
+	// UIと描画関連の更新
+	emojiUI_.Update(currentCondition,camera_.get());
+	UpdateDebugUI();
+
+	// 時刻オーバーレイの色更新
+	struct ColorKey{ float ratio; Vector4 color; };
+	static constexpr ColorKey kKeys[] = {
+		{ 0.00f, { 1.0f, 0.40f, 0.10f, 0.30f } },
+		{ 0.17f, { 0.02f, 0.02f, 0.20f, 0.65f } },
+		{ 0.42f, { 0.00f, 0.00f, 0.05f, 0.82f } },
+		{ 0.67f, { 0.00f, 0.00f, 0.05f, 0.82f } },
+		{ 0.83f, { 0.10f, 0.03f, 0.25f, 0.55f } },
+		{ 1.00f, { 1.0f, 0.50f, 0.10f, 0.20f } },
+	};
+
+	Vector4 overlayColor = kKeys[0].color;
+	for(int i = 0; i + 1 < 6; ++i){
+		if(timeRatio <= kKeys[i + 1].ratio){
+			float t = (timeRatio - kKeys[i].ratio) / (kKeys[i + 1].ratio - kKeys[i].ratio);
+			const auto& a = kKeys[i].color;
+			const auto& b = kKeys[i + 1].color;
+			overlayColor = {
+				a.x + (b.x - a.x) * t,
+				a.y + (b.y - a.y) * t,
+				a.z + (b.z - a.z) * t,
+				a.w + (b.w - a.w) * t
+			};
+			break;
+		}
+	}
+	skyOverlay_->SetColor(overlayColor);
+	skyOverlay_->Update();
+
+	timeDisplay_.Update(gameTime_.GetHour(),gameTime_.GetMinute());
+	sprite1_->Update();
+
+	if(videoPlayer_){
+		videoPlayer_->Update();
+	}
+	ParticleManager::GetInstance()->Update(camera_.get());
+	fade_.Update();
+}
+
+void GamePlayScene::UpdateTutorial(){
+	if(tutorialStep_ == TutorialStep::None) return;
+
+	// ----- スキップ入力 -----
+	// 修正：!isSkipTriggered_ に加え、fadeの状態もチェックして二重呼び出しを防ぐ
+	if(input_->TriggerKey(DIK_RETURN) && !isSkipTriggered_){
+		if(fade_.GetStatus() == Fade::Status::None){
+			fade_.Start(Fade::Status::FadeOut,0.5f);
+			isSkipTriggered_ = true;
+		}
+	}
+
+	// メイン更新ルーチン（スキップ中以外）
+	if(!isSkipTriggered_){
+		displayTimer_ += 1.0f / 60.0f;
+		tutorialTimer_ += 1.0f / 60.0f;
+
+		Player* player = playerManager_->GetPlayer();
+
+		auto TransitionTo = [&](TutorialStep nextStep){
+			tutorialStep_ = nextStep;
+			tutorialTimer_ = 0.0f;
+			displayTimer_ = 0.0f;
+			isExiting_ = false;
+			exitTimer_ = 0.0f;
+			spawnOnce_ = true;
+			tutorialCount_ = 0;
+			};
+
+		switch(tutorialStep_){
+		case TutorialStep::Move:
+		{
+			bool isStickMoving = (std::abs(input_->GetLeftStick().x) > 0.2f || std::abs(input_->GetLeftStick().y) > 0.2f);
+			bool isKeyMoving = (input_->PushKey(DIK_W) || input_->PushKey(DIK_A) ||
+				input_->PushKey(DIK_S) || input_->PushKey(DIK_D) ||
+				input_->PushKey(DIK_UP) || input_->PushKey(DIK_DOWN) ||
+				input_->PushKey(DIK_LEFT) || input_->PushKey(DIK_RIGHT));
+
+			if(!isExiting_){
+				if(!(isStickMoving || isKeyMoving)){
+					tutorialTimer_ -= 1.0f / 60.0f;
+				}
+				if(tutorialTimer_ >= 1.0f){
+					isExiting_ = true;
+					tutorialTimer_ = 1.0f;
+				}
+			} else{
+				exitTimer_ += 1.0f / 60.0f;
+				if(exitTimer_ >= 0.5f){
+					TransitionTo(TutorialStep::Shoot);
+				}
+			}
+		}
+		break;
+
+		case TutorialStep::Shoot:
+			if(spawnOnce_){
+				Vector3 spawnPos = player->GetPosition();
+				spawnPos.x += 10.0f;
+				spawnPos.y = 5.0f;
+				enemyManager_->SpawnEnemy(spawnPos);
+				spawnOnce_ = false;
+			}
+			if(enemyManager_->GetEnemies().empty()){
+				TransitionTo(TutorialStep::ScrollStart);
+			}
+			break;
+
+		case TutorialStep::ScrollStart:
+			if(tutorialTimer_ > 3.0f){
+				TransitionTo(TutorialStep::BattleTrain);
+			}
+			break;
+
+		case TutorialStep::BattleTrain:
+			if(spawnOnce_){
+				Vector3 spawnPos = player->GetPosition();
+				spawnPos.x += 15.0f;
+				spawnPos.y = 5.0f;
+				enemyManager_->SpawnEnemy(spawnPos);
+				spawnOnce_ = false;
+			} else{
+				if(enemyManager_->GetEnemies().empty()){
+					tutorialCount_++;
+					if(tutorialCount_ >= 3){
+						TransitionTo(TutorialStep::SwipeTrain);
+					} else{
+						spawnOnce_ = true;
+					}
+				}
+			}
+			break;
+
+		case TutorialStep::SwipeTrain:
+			if(spawnOnce_){
+				player->SetSwipeStock(3);
+				tutorialCount_ = (int)player->GetCondition()->GetCondition();
+				spawnOnce_ = false;
+			}
+			if((int)player->GetCondition()->GetCondition() < tutorialCount_){
+				TransitionTo(TutorialStep::SpecialMove);
+			}
+			break;
+
+		case TutorialStep::SpecialMove:
+			if(spawnOnce_){
+				player->GetCondition()->SetCondition(Condition::ConditionType::Excellent);
+				player->SetInvincible(true);
+				spawnOnce_ = false;
+			}
+			if(player->IsSpecialMoveActive()){
+				TransitionTo(TutorialStep::Epilogue);
+			}
+			break;
+
+		case TutorialStep::Epilogue:
+			// 修正：!isExiting_ の時に一度だけ Start を呼ぶ
+			if(tutorialTimer_ > 2.0f && !isExiting_){
+				fade_.Start(Fade::Status::FadeOut,0.5f);
+				isExiting_ = true;
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	// ----- フェード終了判定と本編移行 -----
+	bool isFadingOut = isSkipTriggered_ || (tutorialStep_ == TutorialStep::Epilogue && isExiting_);
+
+	if(isFadingOut && fade_.GetStatus() == Fade::Status::None){
+		isTutorialActive_ = false;
+		tutorialStep_ = TutorialStep::None;
+		isSkipTriggered_ = false;
+
+		ScoreManager::GetInstance()->ResetCurrentScore();
+		playerManager_->GetPlayer()->SetInvincible(false);
+		enemyManager_->SpawnEnemy({camera_->GetTranslate().x + 30.0f, 5.0f, 0.0f});
+
+		// 本編開始の明転
+		fade_.Start(Fade::Status::FadeIn,0.5f);
+		isExiting_ = false;
+	}
+}
+
+// =====================================================
+// ファイルダイアログヘルパー（デバッグ専用）
+// =====================================================
+
+#ifdef USE_IMGUI
+/** @brief Windows標準のファイル選択ダイアログを開き、選択されたパスを返す
+ *  @param filter  例: "PNG\0*.png\0OBJ\0*.obj\0All\0*.*\0\0"（\0区切り、末尾\0\0）
+ *  @param initialDir  最初に開くフォルダ（nullptr で前回の場所）
+ *  @return 選択されたファイルの絶対パス。キャンセル時は空文字列
+ */
+static std::string OpenFileDialog(const char* filter,const char* initialDir = nullptr){
+	char szFile[MAX_PATH] = {};
+	OPENFILENAMEA ofn = {};
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = GetActiveWindow();
+	ofn.lpstrFilter = filter;
+	ofn.lpstrFile = szFile;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrInitialDir = initialDir;
+	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+	return GetOpenFileNameA(&ofn)?std::string(szFile):"";
+}
+#endif
+
+// =====================================================
+// デバッグ UI（ImGui）
+// =====================================================
+
+void GamePlayScene::UpdateDebugUI(){
+#ifdef USE_IMGUI
+	if(!imguiManager_) return;
+
+	// K キーで即ゲームオーバー
+	if(input_->TriggerKey(DIK_K)){
+		SceneManager::GetInstance()->ChangeScene("GAMEOVER");
+		return;
+	}
+
+	ImGui::Begin("Tutorial Status");
+	switch(tutorialStep_){
+	case TutorialStep::Move: ImGui::Text("Step: Move"); break;
+	case TutorialStep::Shoot: ImGui::Text("Step: Shoot"); break;
+	case TutorialStep::ScrollStart: ImGui::Text("Step: ScrollStart"); break;
+	case TutorialStep::BattleTrain: ImGui::Text("Step: BattleTrain"); break;
+	case TutorialStep::SwipeTrain: ImGui::Text("Step: SwipeTrain"); break;
+	case TutorialStep::SpecialMove: ImGui::Text("Step: SpecialMove"); break;
+	case TutorialStep::Epilogue: ImGui::Text("Step: Epilogue"); break;
+	case TutorialStep::None: ImGui::Text("Step: None"); break;
+	default: break;
+	}
+	ImGui::End();
+
+	static float animSpeed = 1.0f;
+
+	// Condition 名を返すヘルパー
+	auto conditionName = [](Condition::ConditionType c) -> const char*{
+		switch(c){
+		case Condition::ConditionType::Excellent: return "Excellent";
+		case Condition::ConditionType::Good:      return "Good";
+		case Condition::ConditionType::Normal:    return "Normal";
+		case Condition::ConditionType::Bad:       return "Bad";
+		case Condition::ConditionType::Terrible:  return "Terrible";
+		}
+		return "Unknown";
+		};
+
+	const auto& enemies = enemyManager_->GetEnemies();
+
+	// =====================================================
+	// Hierarchy（左パネル）
+	// =====================================================
+	ImGui::SetNextWindowPos(ImVec2(0,0),ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(220,400),ImGuiCond_Once);
+	ImGui::Begin("Hierarchy");
+
+	if(ImGui::Selectable("Camera",editorSelectedType_ == SelectedType::Camera)){
+		editorSelectedType_ = SelectedType::Camera;
+		editorSelectedIndex_ = -1;
+	}
+	if(ImGui::Selectable("Player",editorSelectedType_ == SelectedType::Player)){
+		editorSelectedType_ = SelectedType::Player;
+		editorSelectedIndex_ = -1;
+	}
+	if(ImGui::Selectable("Enemy Settings",editorSelectedType_ == SelectedType::EnemySettings)){
+		editorSelectedType_ = SelectedType::EnemySettings;
+		editorSelectedIndex_ = -1;
+	}
+
+	char enemyHeader[32];
+	snprintf(enemyHeader,sizeof(enemyHeader),"Enemies (%d)",(int)enemies.size());
+	if(ImGui::TreeNodeEx(enemyHeader,ImGuiTreeNodeFlags_DefaultOpen)){
+		for(int i = 0; i < (int)enemies.size(); i++){
+			bool sel = (editorSelectedType_ == SelectedType::Enemy && editorSelectedIndex_ == i);
+			char label[48];
+			snprintf(label,sizeof(label),"  Enemy[%d] HP:%d",i,enemies[i]->GetHP());
+			if(ImGui::Selectable(label,sel)){
+				editorSelectedType_ = SelectedType::Enemy;
+				editorSelectedIndex_ = i;
+			}
+		}
+		ImGui::TreePop();
+	}
+
+	char turretHeader[48];
+	snprintf(turretHeader,sizeof(turretHeader),"Turrets (%d)",(int)turrets_.size());
+	bool turretOpen = ImGui::TreeNodeEx(turretHeader);
+	if(turretOpen){
+		for(int i = 0; i < (int)turrets_.size(); i++){
+			bool sel = (editorSelectedType_ == SelectedType::Turret && editorSelectedIndex_ == i);
+			const std::string& tname = (i < (int)turretNames_.size())?turretNames_[i]:"Turret";
+			char label[80];
+			snprintf(label,sizeof(label),"  %s",tname.c_str());
+			if(ImGui::Selectable(label,sel)){
+				editorSelectedType_ = SelectedType::Turret;
+				editorSelectedIndex_ = i;
+			}
+		}
+		ImGui::TreePop();
+	}
+
+	// ----- UI Elements -----
+	char uiHeader[48];
+	snprintf(uiHeader,sizeof(uiHeader),"UI Elements (%d)",(int)uiElements_.size());
+	bool uiOpen = ImGui::TreeNodeEx(uiHeader);
+	ImGui::SameLine();
+	if(ImGui::SmallButton("+##addUI")){
+		UIEntry entry;
+		entry.name = "UI Element " + std::to_string(uiElements_.size() + 1);
+		entry.texPath = playerTexPath_;
+		entry.sprite = std::make_unique<Sprite>();
+		entry.sprite->Initialize(spriteCommon_.get(),entry.texPath);
+		entry.sprite->SetPosition({640.0f, 360.0f});
+		entry.sprite->SetSize({100.0f, 100.0f});
+		uiElements_.push_back(std::move(entry));
+	}
+	if(uiOpen){
+		for(int i = 0; i < (int)uiElements_.size(); i++){
+			bool sel = (editorSelectedType_ == SelectedType::UIElement && editorSelectedIndex_ == i);
+			char label[80];
+			snprintf(label,sizeof(label),"  %s",uiElements_[i].name.c_str());
+			if(ImGui::Selectable(label,sel)){
+				editorSelectedType_ = SelectedType::UIElement;
+				editorSelectedIndex_ = i;
+			}
+		}
+		ImGui::TreePop();
+	}
+
+	// ----- Save ボタン（選択中のオブジェクトに応じて保存先を切り替え） -----
+	ImGui::Separator();
+	static bool savedFlash = false;
+	static float savedTimer = 0.0f;
+	if(savedTimer > 0.0f){
+		savedTimer -= 1.0f / 60.0f;
+		ImGui::TextColored(ImVec4(0.2f,1.0f,0.4f,1.0f),"Saved!");
+	} else{
+		if(ImGui::Button("Save",ImVec2(-1,0))){
+			switch(editorSelectedType_){
+			case SelectedType::Camera:       SaveCameraParams(); savedTimer = 1.5f; break;
+			case SelectedType::Player:       SaveModelPaths();   savedTimer = 1.5f; break;
+			case SelectedType::EnemySettings:SaveEnemyParams();  savedTimer = 1.5f; break;
+			case SelectedType::Enemy:        SaveModelPaths();   savedTimer = 1.5f; break;
+			case SelectedType::Turret:       SaveTurretData();   savedTimer = 1.5f; break;
+			case SelectedType::UIElement:    SaveUILayout();     savedTimer = 1.5f; break;
+			default: break;
+			}
+		}
+	}
+
+	ImGui::End();
+
+	// =====================================================
+	// Inspector（右パネル）
+	// =====================================================
+	ImGui::SetNextWindowPos(ImVec2(1060,0),ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(220,500),ImGuiCond_Once);
+	ImGui::Begin("Inspector");
+
+	// 選択インデックスが範囲外になった場合にリセット
+	if(editorSelectedType_ == SelectedType::Enemy &&
+		(editorSelectedIndex_ < 0 || editorSelectedIndex_ >= (int)enemies.size())){
+		editorSelectedType_ = SelectedType::None;
+	}
+	if(editorSelectedType_ == SelectedType::Turret &&
+		(editorSelectedIndex_ < 0 || editorSelectedIndex_ >= (int)turrets_.size())){
+		editorSelectedType_ = SelectedType::None;
+	}
+	if(editorSelectedType_ == SelectedType::UIElement &&
+		(editorSelectedIndex_ < 0 || editorSelectedIndex_ >= (int)uiElements_.size())){
+		editorSelectedType_ = SelectedType::None;
+	}
+
+	switch(editorSelectedType_){
+
+	case SelectedType::Camera:
+	{
+		ImGui::TextColored(ImVec4(1,1,0,1),"[Camera]");
+		ImGui::Separator();
+		Vector3 pos = camera_->GetTranslate();
+		if(ImGui::DragFloat3("Position",&pos.x,0.1f)) camera_->SetTranslate(pos);
+		Vector3 rot = camera_->GetRotate();
+		if(ImGui::DragFloat3("Rotation",&rot.x,0.01f)) camera_->SetRotate(rot);
+		ImGui::Separator();
+		if(ImGui::Button("Save##inspCam")) SaveCameraParams();
+		break;
+	}
+
+	case SelectedType::Player:
+	{
+		ImGui::TextColored(ImVec4(0.2f,1,0.4f,1),"[Player]");
+		ImGui::Separator();
+		Vector3 pos = playerManager_->GetPlayer()->GetPosition();
+		if(ImGui::DragFloat3("Position",&pos.x,0.1f))
+			playerManager_->GetPlayer()->SetPosition(pos);
+		float hp = playerManager_->GetPlayer()->GetHP();
+		if(ImGui::SliderFloat("HP",&hp,0.0f,1000.0f))
+			playerManager_->GetPlayer()->SetHP(hp);
+		bool inv = playerManager_->GetPlayer()->IsInvincible();
+		if(ImGui::Checkbox("Invincible",&inv))
+			playerManager_->GetPlayer()->SetInvincible(inv);
+		ImGui::Separator();
+		ImGui::TextDisabled("Model");
+		ImGui::TextDisabled("OBJ : %.30s",playerObjPath_.c_str());
+		ImGui::TextDisabled("TEX : %.30s",playerTexPath_.c_str());
+		if(ImGui::Button("Browse OBJ##pl")){
+			std::string p = OpenFileDialog("OBJ Files\0*.obj\0All Files\0*.*\0\0","Resources");
+			if(!p.empty()){
+				playerObjPath_ = p;
+				modelPlayer_->Initialize(modelCommon_.get(),playerObjPath_,playerTexPath_);
+			}
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Browse Tex##pl")){
+			std::string p = OpenFileDialog("PNG Files\0*.png\0All Files\0*.*\0\0","Resources");
+			if(!p.empty()){
+				playerTexPath_ = p;
+				modelPlayer_->Initialize(modelCommon_.get(),playerObjPath_,playerTexPath_);
+			}
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Save##inspPl")) SaveModelPaths();
+		break;
+	}
+
+	case SelectedType::Enemy:
+	{
+		Enemy* e = enemies[editorSelectedIndex_].get();
+		ImGui::TextColored(ImVec4(1,0.5f,0,1),"[Enemy %d]",editorSelectedIndex_);
+		ImGui::Separator();
+		Vector3 pos = e->GetPosition();
+		if(ImGui::DragFloat3("Position",&pos.x,0.1f)) e->SetPosition(pos);
+		ImGui::Text("HP            : %d",e->GetHP());
+		ImGui::Text("State         : %s",e->GetStateName());
+		ImGui::Text("Condition     : %s",conditionName(e->GetCondition()));
+		ImGui::Text("MoveSpeed x   : %.2f",e->GetMoveSpeedMultiplier());
+		ImGui::Text("ShootInterval : %d",e->GetShootInterval());
+		if(ImGui::Button("Kill")) e->Damage(9999);
+		ImGui::Separator();
+		ImGui::TextDisabled("Model (全敵に反映)");
+		if(ImGui::Button("Browse OBJ##en")){
+			std::string p = OpenFileDialog("OBJ Files\0*.obj\0All Files\0*.*\0\0","Resources");
+			if(!p.empty()){
+				enemyObjPath_ = p;
+				modelEnemy_->Initialize(modelCommon_.get(),enemyObjPath_,enemyTexPath_);
+			}
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Browse Tex##en")){
+			std::string p = OpenFileDialog("PNG Files\0*.png\0All Files\0*.*\0\0","Resources");
+			if(!p.empty()){
+				enemyTexPath_ = p;
+				modelEnemy_->Initialize(modelCommon_.get(),enemyObjPath_,enemyTexPath_);
+			}
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Save##inspEn")) SaveModelPaths();
+		break;
+	}
+
+	case SelectedType::EnemySettings:
+	{
+		ImGui::TextColored(ImVec4(1,0.8f,0.2f,1),"[Enemy Settings]");
+		ImGui::Separator();
+		int spawnInterval = enemyManager_->GetSpawnInterval();
+		if(ImGui::SliderInt("Spawn Interval(f)",&spawnInterval,30,600))
+			enemyManager_->SetSpawnInterval(spawnInterval);
+		ImGui::SameLine(); ImGui::TextDisabled("%.1fs",spawnInterval / 60.0f);
+		int maxEnemy = enemyManager_->GetMaxEnemy();
+		if(ImGui::SliderInt("Max Enemy",&maxEnemy,1,30))
+			enemyManager_->SetMaxEnemy(maxEnemy);
+		ImGui::Separator();
+		ImGui::TextDisabled("Enemy Condition Probability");
+		int* a = enemyManager_->GetCondThreshA();
+		int* b = enemyManager_->GetCondThreshB();
+		ImGui::Text("Exc: Good[%d%%] Exc[%d%%]",a[0],100 - a[0]);
+		ImGui::SliderInt("##excA",&a[0],0,100);
+		if(b[1] < a[1]) b[1] = a[1];
+		ImGui::Text("Good: Exc[%d%%] Good[%d%%] Norm[%d%%]",a[1],b[1] - a[1],100 - b[1]);
+		ImGui::SetNextItemWidth(90); ImGui::SliderInt("##goodA",&a[1],0,b[1]);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(90); ImGui::SliderInt("##goodB",&b[1],a[1],100);
+		if(b[2] < a[2]) b[2] = a[2];
+		ImGui::Text("Norm: Good[%d%%] Norm[%d%%] Bad[%d%%]",a[2],b[2] - a[2],100 - b[2]);
+		ImGui::SetNextItemWidth(90); ImGui::SliderInt("##normA",&a[2],0,b[2]);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(90); ImGui::SliderInt("##normB",&b[2],a[2],100);
+		if(b[3] < a[3]) b[3] = a[3];
+		ImGui::Text("Bad: Norm[%d%%] Bad[%d%%] Terr[%d%%]",a[3],b[3] - a[3],100 - b[3]);
+		ImGui::SetNextItemWidth(90); ImGui::SliderInt("##badA",&a[3],0,b[3]);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(90); ImGui::SliderInt("##badB",&b[3],a[3],100);
+		ImGui::Text("Terr: Bad[%d%%] Terr[%d%%]",a[4],100 - a[4]);
+		ImGui::SliderInt("##terrA",&a[4],0,100);
+		ImGui::Separator();
+		if(ImGui::Button("Save##inspES")) SaveEnemyParams();
+		ImGui::SameLine();
+		if(ImGui::Button("Load##inspES")) LoadEnemyParams();
+		break;
+	}
+
+	case SelectedType::Turret:
+	{
+		Turret* t = turrets_[editorSelectedIndex_].get();
+		ImGui::TextColored(ImVec4(0,0.8f,1,1),"[Turret]");
+		ImGui::Separator();
+
+		// 名前変更
+		static int lastTurIdx = -2;
+		static char turNameBuf[64] = {};
+		if(lastTurIdx != editorSelectedIndex_){
+			lastTurIdx = editorSelectedIndex_;
+			const std::string& n = (editorSelectedIndex_ < (int)turretNames_.size())
+				?turretNames_[editorSelectedIndex_]:"";
+			strncpy_s(turNameBuf,n.c_str(),sizeof(turNameBuf) - 1);
+		}
+		ImGui::SetNextItemWidth(-1);
+		if(ImGui::InputText("##turname",turNameBuf,sizeof(turNameBuf))){
+			if(editorSelectedIndex_ < (int)turretNames_.size())
+				turretNames_[editorSelectedIndex_] = turNameBuf;
+		}
+
+		ImGui::Separator();
+		Vector3 pos = t->GetPosition();
+		if(ImGui::DragFloat3("Position",&pos.x,0.1f)) t->SetPosition(pos);
+		ImGui::Text("Status : %s",t->IsDead()?"Dead":"Alive");
+		ImGui::Separator();
+		if(ImGui::Button("Save##inspTur")) SaveTurretData();
+		ImGui::SameLine();
+		if(ImGui::Button("Load##inspTur")) LoadTurretData();
+		break;
+	}
+
+	case SelectedType::UIElement:
+	{
+		UIEntry& entry = uiElements_[editorSelectedIndex_];
+		Sprite* sp = entry.sprite.get();
+		ImGui::TextColored(ImVec4(1,0.5f,1,1),"[UI Element]");
+		ImGui::Separator();
+
+		// 名前変更
+		static int lastUIIdx = -2;
+		static char uiNameBuf[64] = {};
+		if(lastUIIdx != editorSelectedIndex_){
+			lastUIIdx = editorSelectedIndex_;
+			strncpy_s(uiNameBuf,entry.name.c_str(),sizeof(uiNameBuf) - 1);
+		}
+		ImGui::SetNextItemWidth(-1);
+		if(ImGui::InputText("##uiname",uiNameBuf,sizeof(uiNameBuf)))
+			entry.name = uiNameBuf;
+
+		ImGui::Separator();
+
+		// 位置・サイズ・回転
+		Vector2 pos = sp->GetPosition();
+		if(ImGui::DragFloat2("Position",&pos.x,1.0f)) sp->SetPosition(pos);
+		Vector2 sz = sp->GetSize();
+		if(ImGui::DragFloat2("Size",&sz.x,1.0f,1.0f,4096.0f)) sp->SetSize(sz);
+		float rot = sp->GetRotation();
+		if(ImGui::DragFloat("Rotation",&rot,0.01f)) sp->SetRotation(rot);
+
+		// 色
+		Vector4 col = sp->GetColor();
+		if(ImGui::ColorEdit4("Color",&col.x)) sp->SetColor(col);
+
+		ImGui::Separator();
+
+		// テクスチャ
+		ImGui::TextDisabled("%.40s",entry.texPath.empty()?"(no texture)":entry.texPath.c_str());
+		if(ImGui::Button("Browse##uitex")){
+			std::string p = OpenFileDialog("PNG Files\0*.png\0All Files\0*.*\0\0","Resources");
+			if(!p.empty()){
+				entry.texPath = p;
+				sp->SetTexture(p);
+			}
+		}
+
+		ImGui::Separator();
+		if(ImGui::Button("Delete##ui")){
+			uiElements_.erase(uiElements_.begin() + editorSelectedIndex_);
+			editorSelectedType_ = SelectedType::None;
+			editorSelectedIndex_ = -1;
+			lastUIIdx = -2;
+			SaveUILayout();
+		} else{
+			ImGui::SameLine();
+			if(ImGui::Button("Save##inspUI")) SaveUILayout();
+			ImGui::SameLine();
+			if(ImGui::Button("Load##inspUI")) LoadUILayout();
+		}
+		break;
+	}
+
+	default:
+		ImGui::TextDisabled("(Nothing selected)");
+		ImGui::TextDisabled("Hierarchy でオブジェクトを");
+		ImGui::TextDisabled("クリックしてください");
+		break;
+	}
+
+	ImGui::End();
+
+	// =====================================================
+	// Scene Controls（左下パネル）
+	// =====================================================
+	ImGui::SetNextWindowPos(ImVec2(0,400),ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(220,320),ImGuiCond_Once);
+	ImGui::Begin("Scene Controls");
+
+	// スコア
+	if(ImGui::CollapsingHeader("Score")){
+		ImGui::Text("Current : %d",ScoreManager::GetInstance()->GetCurrentScore());
+		const auto& ranking = ScoreManager::GetInstance()->GetRanking();
+		if(ranking.empty()) ImGui::TextDisabled("  (no records)");
+		for(int i = 0; i < (int)ranking.size(); ++i)
+			ImGui::Text("  %2d. %d",i + 1,ranking[i]);
+		if(ImGui::Button("Reset All Scores")) ScoreManager::GetInstance()->ResetAllScores();
+	}
+
+	// ゲーム時刻
+	if(ImGui::CollapsingHeader("Game Time")){
+		ImGui::Text("Time : %02d:%02d",gameTime_.GetHour(),gameTime_.GetMinute());
+		if(ImGui::Button("Skip 1 Hour")) gameTime_.SkipMinutes(60.0f);
+	}
+
+	// アニメーション
+	if(ImGui::CollapsingHeader("Animation")){
+		ImGui::SliderFloat("Speed##anim",&animSpeed,0.0f,20.0f);
+	}
+
+	// オーディオ
+	if(ImGui::CollapsingHeader("Audio")){
+		if(ImGui::Button("Play BGM")) audio_->PlayBGM(bgmData_);
+		ImGui::SameLine();
+		if(ImGui::Button("Stop BGM")) audio_->StopBGM();
+	}
+
+	// 動画
+	if(ImGui::CollapsingHeader("Video") && videoPlayer_){
+		Vector2 vpos = videoPlayer_->GetPosition();
+		if(ImGui::DragFloat2("Position##vid",&vpos.x,1.0f)) videoPlayer_->SetPosition(vpos);
+	}
+
+	// スポーン
+	if(ImGui::CollapsingHeader("Spawn")){
+		static float spawnX = 15.0f,spawnY = 5.0f;
+		ImGui::SetNextItemWidth(90);
+		ImGui::DragFloat("X##sp",&spawnX,0.1f);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(90);
+		ImGui::DragFloat("Y##sp",&spawnY,0.1f);
+		if(ImGui::Button("Spawn Enemy"))
+			enemyManager_->SpawnEnemy({spawnX, spawnY, 0.0f});
+		ImGui::SameLine();
+		if(ImGui::Button("Spawn Turret")){
+			auto turret = std::make_unique<Turret>();
+			turret->Initialize(modelCommon_.get(),modelBullet_.get(),modelBullet_.get(),
+				{spawnX, spawnY, 0.0f},enemyManager_.get());
+			turrets_.push_back(std::move(turret));
+			turretNames_.push_back("Turret");
+		}
+	}
+
+	// アクション
+	if(ImGui::CollapsingHeader("Actions")){
+		if(ImGui::Button("Kill All Enemies")){
+			for(auto& e : enemies) e->Damage(9999);
+		}
+		if(ImGui::Button("Game Clear")) SceneManager::GetInstance()->ChangeScene("CLEAR");
+		ImGui::SameLine();
+		if(ImGui::Button("Game Over")) SceneManager::GetInstance()->ChangeScene("GAMEOVER");
+	}
+
+	// デバッグコントロール
+	if(ImGui::CollapsingHeader("Debug Controls")){
+		// スクロール停止
+		ImGui::Checkbox("Scroll Pause",&debugScrollPaused_);
+
+		// 敵出現停止（スクロール停止とは独立）
+		ImGui::Checkbox("Spawn Disable",&debugSpawnDisabled_);
+
+		ImGui::Separator();
+
+		// テンション上げる/下げる
+		Player* player = playerManager_->GetPlayer();
+		ImGui::Text("Condition: %s",conditionName(player->GetCondition()->GetCondition()));
+		if(ImGui::Button("Rank Up")) player->GetCondition()->RankUp();
+		ImGui::SameLine();
+		if(ImGui::Button("Rank Down")) player->GetCondition()->RankDown();
+
+		ImGui::Separator();
+
+		// スワイプストック
+		ImGui::Text("SwipeReady : %s",player->IsSwipeReady()?"YES":"NO");
+		ImGui::Text("Stock      : %d",player->GetSwipeStock());
+		ImGui::Text("SwipeCount : %d / 3",player->GetSwipeSuccessCount());
+		if(ImGui::Button("Add Stock x3")){
+			player->OnEnemyDefeated();
+			player->OnEnemyDefeated();
+			player->OnEnemyDefeated();
+		}
+	}
+
+	ImGui::End();
+
+	// =====================================================
+	// Edit Mode（フローティングボタン）
+	// =====================================================
+	ImGui::SetNextWindowPos(ImVec2(230,0),ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(160,60),ImGuiCond_Once);
+	ImGui::Begin("Edit Mode",nullptr,ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+	if(debugEditMode_){
+		ImGui::PushStyleColor(ImGuiCol_Button,ImVec4(0.8f,0.3f,0.1f,1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered,ImVec4(1.0f,0.4f,0.2f,1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive,ImVec4(0.6f,0.2f,0.0f,1.0f));
+		if(ImGui::Button("EDIT MODE ON",ImVec2(-1,0))){
+			debugEditMode_ = false;
+			debugScrollPaused_ = false;
+			debugSpawnDisabled_ = false;
+		}
+		ImGui::PopStyleColor(3);
+	} else{
+		if(ImGui::Button("EDIT MODE OFF",ImVec2(-1,0))){
+			debugEditMode_ = true;
+			debugScrollPaused_ = true;
+			debugSpawnDisabled_ = true;
+		}
+	}
+	ImGui::End();
+
+	animationTime_ += (1.0f / 60.0f) * animSpeed;
+#else
+	animationTime_ += 1.0f / 60.0f;
+#endif
+}
+
+// =====================================================
+// デバッグパラメータ JSON 保存 / 読み込み
+// =====================================================
+
+static float ReadJsonFloat(const std::string& src,const std::string& key,float def){
+	std::string needle = "\"" + key + "\": ";
+	auto pos = src.find(needle);
+	if(pos == std::string::npos) return def;
+	pos += needle.size();
+	try{ return std::stof(src.substr(pos)); }
+	catch(...){ return def; }
+}
+
+static int ReadJsonInt(const std::string& src,const std::string& key,int def){
+	std::string needle = "\"" + key + "\": ";
+	auto pos = src.find(needle);
+	if(pos == std::string::npos) return def;
+	pos += needle.size();
+	try{ return std::stoi(src.substr(pos)); }
+	catch(...){ return def; }
+}
+
+static std::string ReadJsonString(const std::string& src,const std::string& key,const std::string& def){
+	std::string needle = "\"" + key + "\":";
+	auto pos = src.find(needle);
+	if(pos == std::string::npos) return def;
+	pos += needle.size();
+	while(pos < src.size() && (src[pos] == ' ' || src[pos] == '\t')) pos++;
+	if(pos >= src.size() || src[pos] != '"') return def;
+	pos++;
+	auto end = src.find('"',pos);
+	if(end == std::string::npos) return def;
+	return src.substr(pos,end - pos);
+}
+
+// ---- カメラ ----
+void GamePlayScene::SaveCameraParams(){
+	std::ofstream f("Resources/debug_camera.json");
+	if(!f) return;
+	Vector3 cp = camera_->GetTranslate();
+	Vector3 cr = camera_->GetRotate();
+	f << "{\n";
+	f << "  \"camera_pos_x\": " << cp.x << ",\n";
+	f << "  \"camera_pos_y\": " << cp.y << ",\n";
+	f << "  \"camera_pos_z\": " << cp.z << ",\n";
+	f << "  \"camera_rot_x\": " << cr.x << ",\n";
+	f << "  \"camera_rot_y\": " << cr.y << ",\n";
+	f << "  \"camera_rot_z\": " << cr.z << "\n";
+	f << "}\n";
+}
+
+void GamePlayScene::LoadCameraParams(){
+	std::ifstream f("Resources/debug_camera.json");
+	if(!f) return;
+	std::string src((std::istreambuf_iterator<char>(f)),std::istreambuf_iterator<char>());
+	Vector3 cp = {
+		ReadJsonFloat(src, "camera_pos_x", camera_->GetTranslate().x),
+		ReadJsonFloat(src, "camera_pos_y", camera_->GetTranslate().y),
+		ReadJsonFloat(src, "camera_pos_z", camera_->GetTranslate().z)
+	};
+	Vector3 cr = {
+		ReadJsonFloat(src, "camera_rot_x", camera_->GetRotate().x),
+		ReadJsonFloat(src, "camera_rot_y", camera_->GetRotate().y),
+		ReadJsonFloat(src, "camera_rot_z", camera_->GetRotate().z)
+	};
+	camera_->SetTranslate(cp);
+	camera_->SetRotate(cr);
+}
+
+// ---- 敵設定 ----
+void GamePlayScene::SaveEnemyParams(){
+	std::ofstream f("Resources/debug_enemy.json");
+	if(!f) return;
+	int* ta = enemyManager_->GetCondThreshA();
+	int* tb = enemyManager_->GetCondThreshB();
+	f << "{\n";
+	f << "  \"spawn_interval\": " << enemyManager_->GetSpawnInterval() << ",\n";
+	f << "  \"max_enemy\": " << enemyManager_->GetMaxEnemy() << ",\n";
+	for(int i = 0; i < 5; ++i)
+		f << "  \"cond_thresh_a_" << i << "\": " << ta[i] << ",\n";
+	for(int i = 0; i < 4; ++i)
+		f << "  \"cond_thresh_b_" << i << "\": " << tb[i] << ",\n";
+	f << "  \"cond_thresh_b_4\": " << tb[4] << "\n";
+	f << "}\n";
+}
+
+void GamePlayScene::LoadEnemyParams(){
+	std::ifstream f("Resources/debug_enemy.json");
+	if(!f) return;
+	std::string src((std::istreambuf_iterator<char>(f)),std::istreambuf_iterator<char>());
+	enemyManager_->SetSpawnInterval(ReadJsonInt(src,"spawn_interval",enemyManager_->GetSpawnInterval()));
+	enemyManager_->SetMaxEnemy(ReadJsonInt(src,"max_enemy",enemyManager_->GetMaxEnemy()));
+	int* ta = enemyManager_->GetCondThreshA();
+	int* tb = enemyManager_->GetCondThreshB();
+	for(int i = 0; i < 5; ++i){
+		char key[32];
+		snprintf(key,sizeof(key),"cond_thresh_a_%d",i);
+		ta[i] = ReadJsonInt(src,key,ta[i]);
+		snprintf(key,sizeof(key),"cond_thresh_b_%d",i);
+		tb[i] = ReadJsonInt(src,key,tb[i]);
+	}
+}
+
+// ---- モデルパス ----
+void GamePlayScene::SaveModelPaths(){
+	std::ofstream f("Resources/debug_models.json");
+	if(!f) return;
+	f << "{\n";
+	f << "  \"player_obj\": \"" << playerObjPath_ << "\",\n";
+	f << "  \"player_tex\": \"" << playerTexPath_ << "\",\n";
+	f << "  \"enemy_obj\":  \"" << enemyObjPath_ << "\",\n";
+	f << "  \"enemy_tex\":  \"" << enemyTexPath_ << "\"\n";
+	f << "}\n";
+}
+
+void GamePlayScene::LoadModelPaths(){
+	std::ifstream f("Resources/debug_models.json");
+	if(!f) return;
+	std::string src((std::istreambuf_iterator<char>(f)),std::istreambuf_iterator<char>());
+
+	// 文字列値を読む
+	auto readStr = [&](const std::string& key,const std::string& def) -> std::string{
+		std::string needle = "\"" + key + "\": \"";
+		auto pos = src.find(needle);
+		if(pos == std::string::npos) return def;
+		pos += needle.size();
+		auto end = src.find('"',pos);
+		return (end == std::string::npos)?def:src.substr(pos,end - pos);
+		};
+
+	playerObjPath_ = readStr("player_obj",playerObjPath_);
+	playerTexPath_ = readStr("player_tex",playerTexPath_);
+	enemyObjPath_ = readStr("enemy_obj",enemyObjPath_);
+	enemyTexPath_ = readStr("enemy_tex",enemyTexPath_);
+
+	modelPlayer_->Initialize(modelCommon_.get(),playerObjPath_,playerTexPath_);
+	modelEnemy_->Initialize(modelCommon_.get(),enemyObjPath_,enemyTexPath_);
+}
+
+// ---- タレットこれは使わないかも ----
+void GamePlayScene::SaveTurretData(){
+	std::ofstream f("Resources/debug_turrets.json");
+	if(!f) return;
+	f << "{\n";
+	f << "  \"count\": " << turrets_.size() << "";
+	for(int i = 0; i < (int)turrets_.size(); i++){
+		Vector3 pos = turrets_[i]->GetPosition();
+		const std::string& name = (i < (int)turretNames_.size())?turretNames_[i]:"Turret";
+		f << ",\n";
+		f << "  \"turret_" << i << "_name\": \"" << name << "\",\n";
+		f << "  \"turret_" << i << "_x\": " << pos.x << ",\n";
+		f << "  \"turret_" << i << "_y\": " << pos.y << ",\n";
+		f << "  \"turret_" << i << "_z\": " << pos.z;
+	}
+	f << "\n}\n";
+}
+
+void GamePlayScene::LoadTurretData(){
+	std::ifstream f("Resources/debug_turrets.json");
+	if(!f) return;
+	std::string src((std::istreambuf_iterator<char>(f)),std::istreambuf_iterator<char>());
+
+	int count = ReadJsonInt(src,"count",0);
+	turrets_.clear();
+	turretNames_.clear();
+	editorSelectedType_ = SelectedType::None;
+	editorSelectedIndex_ = -1;
+
+	for(int i = 0; i < count; i++){
+		std::string nameKey = "turret_" + std::to_string(i) + "_name";
+		std::string xKey = "turret_" + std::to_string(i) + "_x";
+		std::string yKey = "turret_" + std::to_string(i) + "_y";
+		std::string zKey = "turret_" + std::to_string(i) + "_z";
+
+		std::string name = ReadJsonString(src,nameKey,"Turret");
+		float x = ReadJsonFloat(src,xKey,0.0f);
+		float y = ReadJsonFloat(src,yKey,5.0f);
+		float z = ReadJsonFloat(src,zKey,0.0f);
+
+		auto turret = std::make_unique<Turret>();
+		turret->Initialize(modelCommon_.get(),modelBullet_.get(),modelBullet_.get(),
+			{x, y, z},enemyManager_.get());
+		turrets_.push_back(std::move(turret));
+		turretNames_.push_back(name);
+	}
+}
+
+// ---- UI レイアウト ----
+void GamePlayScene::SaveUILayout(){
+	std::ofstream f("Resources/debug_ui.json");
+	if(!f) return;
+	f << "{\n";
+	f << "  \"count\": " << uiElements_.size();
+	for(int i = 0; i < (int)uiElements_.size(); i++){
+		const UIEntry& e = uiElements_[i];
+		Sprite* sp = e.sprite.get();
+		Vector2 pos = sp->GetPosition();
+		Vector2 sz = sp->GetSize();
+		Vector4 col = sp->GetColor();
+		float   rot = sp->GetRotation();
+		f << ",\n";
+		f << "  \"ui_" << i << "_name\":   \"" << e.name << "\",\n";
+		f << "  \"ui_" << i << "_tex\":    \"" << e.texPath << "\",\n";
+		f << "  \"ui_" << i << "_pos_x\":  " << pos.x << ",\n";
+		f << "  \"ui_" << i << "_pos_y\":  " << pos.y << ",\n";
+		f << "  \"ui_" << i << "_sz_x\":   " << sz.x << ",\n";
+		f << "  \"ui_" << i << "_sz_y\":   " << sz.y << ",\n";
+		f << "  \"ui_" << i << "_rot\":    " << rot << ",\n";
+		f << "  \"ui_" << i << "_col_r\":  " << col.x << ",\n";
+		f << "  \"ui_" << i << "_col_g\":  " << col.y << ",\n";
+		f << "  \"ui_" << i << "_col_b\":  " << col.z << ",\n";
+		f << "  \"ui_" << i << "_col_a\":  " << col.w;
+	}
+	f << "\n}\n";
+}
+
+void GamePlayScene::LoadUILayout(){
+	std::ifstream f("Resources/debug_ui.json");
+	if(!f) return;
+	std::string src((std::istreambuf_iterator<char>(f)),std::istreambuf_iterator<char>());
+
+	int count = ReadJsonInt(src,"count",0);
+	uiElements_.clear();
+	editorSelectedType_ = SelectedType::None;
+	editorSelectedIndex_ = -1;
+
+	for(int i = 0; i < count; i++){
+		auto mk = [&](const char* field){ return "ui_" + std::to_string(i) + field; };
+
+		UIEntry entry;
+		entry.name = ReadJsonString(src,mk("_name"),"UI Element");
+		entry.texPath = ReadJsonString(src,mk("_tex"),playerTexPath_);
+		entry.sprite = std::make_unique<Sprite>();
+		entry.sprite->Initialize(spriteCommon_.get(),entry.texPath);
+		entry.sprite->SetPosition({
+			ReadJsonFloat(src, mk("_pos_x"), 640.0f),
+			ReadJsonFloat(src, mk("_pos_y"), 360.0f)});
+		entry.sprite->SetSize({
+			ReadJsonFloat(src, mk("_sz_x"),  100.0f),
+			ReadJsonFloat(src, mk("_sz_y"),  100.0f)});
+		entry.sprite->SetRotation(ReadJsonFloat(src,mk("_rot"),0.0f));
+		entry.sprite->SetColor({
+			ReadJsonFloat(src, mk("_col_r"), 1.0f),
+			ReadJsonFloat(src, mk("_col_g"), 1.0f),
+			ReadJsonFloat(src, mk("_col_b"), 1.0f),
+			ReadJsonFloat(src, mk("_col_a"), 1.0f)});
+		uiElements_.push_back(std::move(entry));
+	}
+}
+
+// =====================================================
+// 描画
+// =====================================================
+
+void GamePlayScene::DrawShadowPass(){
+	ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
+	shadowManager_->BeginShadowPass(commandList);
+	modelCommon_->BeginShadowPass();
+
+	playerManager_->DrawShadow();
+	enemyManager_->DrawShadow();
+	for(const auto& bullet : bullets_) bullet->DrawShadow();
+	for(const auto& turret : turrets_) turret->DrawShadow();
+	if(mapField_) mapField_->DrawShadow();
+
+	shadowManager_->EndShadowPass(commandList);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv = dxCommon_->GetCurrentBackBufferHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE dsv = dxCommon_->GetDsvHandle();
+	commandList->OMSetRenderTargets(1,&rtv,FALSE,&dsv);
+	D3D12_VIEWPORT vp = {0, 0, 1280.0f, 720.0f, 0.0f, 1.0f};
+	D3D12_RECT scissor = {0, 0, 1280, 720};
+	commandList->RSSetViewports(1,&vp);
+	commandList->RSSetScissorRects(1,&scissor);
+}
+
+void GamePlayScene::Draw(){
+	DrawShadowPass();
+
+	// 3D背景（スカイドーム）
+	modelCommon_->CommonDrawSettings();
+	objectCommon_->SetDefaultLight(dxCommon_->GetCommandList());
+	shadowManager_->SetShadowMap(dxCommon_->GetCommandList(),SrvManager::GetInstance());
+
+	skydome_->Draw();
+
+	// 2D背景（雲・空オーバーレイ・動画）
+	spriteCommon_->CommonDrawSettings();
+	shadowManager_->SetShadowMap(dxCommon_->GetCommandList(),SrvManager::GetInstance());
+
+	for(auto& cloud : clouds_){
+		cloud.sprite->Draw();
+	}
+	skyOverlay_->Draw();
+
+
+
+	if(!isTutorialActive_){
+		if(videoPlayer_){
+			videoPlayer_->Draw();
+		}
+	}
+
+	// 3Dオブジェクト（動画の前面に描画）
+	modelCommon_->CommonDrawSettings();
+	objectCommon_->SetDefaultLight(dxCommon_->GetCommandList());
+	shadowManager_->SetShadowMap(dxCommon_->GetCommandList(),SrvManager::GetInstance());
+
+	playerManager_->Draw();
+	enemyManager_->Draw();
+	emojiUI_.Draw();
+
+	for(const auto& turret : turrets_){
+		turret->Draw();
+	}
+
+	if(mapField_){
+		mapField_->Draw();
+	}
+
+	for(const auto& bullet : bullets_){
+		bullet->Draw();
+	}
+
+	enemyManager_->DrawBullets();
+	ParticleManager::GetInstance()->Draw(camera_.get());
+
+	// 2D UI（最前面）
+	spriteCommon_->CommonDrawSettings();
+	shadowManager_->SetShadowMap(dxCommon_->GetCommandList(),SrvManager::GetInstance());
+
+	enemyManager_->DrawConditionIcons(camera_.get());
+
+	// スワイプ進捗UI（3回目は非表示）
+	{
+		int count = playerManager_->GetPlayer()->GetSwipeSuccessCount();
+		if(count <= 2){
+			swipeUI_[count]->Update();
+			swipeUI_[count]->Draw();
+		}
+	}
+
+	if(isTutorialActive_){
+		// --- 表示するスプライトと基準サイズの選択 ---
+		Sprite* currentFlavor = nullptr;
+		Sprite* currentGuide = nullptr;
+		Vector2 flavorSize = {500.0f, 200.0f}; // デフォルト値
+		Vector2 guideSize = {600.0f, 200.0f};  // デフォルト値
+		// --- ステップごとの画像・サイズ切り替えロジック ---
+
+		switch(tutorialStep_){
+		case TutorialStep::Move:
+			currentFlavor = moveUI_.get();
+			currentGuide = moveGuide_.get();
+			flavorSize = {500.0f, 200.0f};
+			guideSize = {600.0f, 200.0f};
+			break;
+
+		case TutorialStep::Shoot:
+			currentFlavor = shootUI_.get();
+			currentGuide = shootGuide_.get();
+			flavorSize = {828.0f, 252.0f};
+			guideSize = {703.0f, 114.0f};
+			break;
+
+		case TutorialStep::ScrollStart:
+			currentFlavor = scrollStartUI_.get();
+			flavorSize = {855.0f, 124.0f};
+			currentGuide = nullptr; // ガイドなし
+			break;
+
+		case TutorialStep::BattleTrain:
+			currentFlavor = battleTrainUI_.get();
+			currentGuide = battleTrainGuide_.get(); // ★追加
+			flavorSize = {822.0f, 123.0f};
+			guideSize = {590.0f, 109.0f};
+			break;
+
+		case TutorialStep::SwipeTrain:
+			currentFlavor = swipeTrainUI_.get();
+			currentGuide = swipeTrainGuide_.get(); // ★追加
+			flavorSize = {771.0f, 122.0f};
+			guideSize = {459.0f, 153.0f};
+			break;
+
+		case TutorialStep::SpecialMove:
+			currentFlavor = specialMoveUI_.get();
+			currentGuide = specialMoveGuide_.get(); // ★追加
+			flavorSize = {714.0f, 221.0f};
+			guideSize = {619.0f, 101.0f};
+			break;
+
+		case TutorialStep::Epilogue:
+			currentFlavor = epilogueUI_.get();
+			flavorSize = {717.0f, 213.0f};
+			currentGuide = nullptr; // ガイドなし
+			break;
+		}
+
+		// --- 選択されたスプライトがある場合のみ描画処理を実行 ---
+		if(currentFlavor){
+			// --- アニメーション用パラメータ ---
+			Vector2 pos = {450.0f, 100.0f}; // 中央上部
+			Vector2 size = flavorSize;
+			Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+			// --- 1枚目（Flavor: セリフ枠）のアニメーション ---
+			if(displayTimer_ <= 1.0f){
+				color.w = 0.0f; // 待機
+			} else if(displayTimer_ <= 1.5f){
+				// 1. 出現 (1.0s ～ 1.5s): 画面中央へズームイン
+				float t = (displayTimer_ - 1.0f) / 0.5f;
+				pos = {450.0f, 150.0f - (50.0f * t)};
+				size = {flavorSize.x * t, flavorSize.y * t}; // flavorSize基準でズーム
+				color.w = t;
+			} else if(displayTimer_ <= 3.0f){
+				// 2. 中央静止 (1.5s ～ 3.0s)
+				pos = {450.0f, 100.0f};
+				size = flavorSize;
+			} else if(displayTimer_ <= 3.5f){
+				// 3. 右上へ移動 (3.0s ～ 3.5s)
+				float t = (displayTimer_ - 3.0f) / 0.5f;
+				pos.x = 450.0f + (1050.0f - 450.0f) * t;
+				pos.y = 100.0f + (120.0f - 100.0f) * t;
+				// 右上の定位置（250x80）へ縮小
+				size.x = flavorSize.x + (250.0f - flavorSize.x) * t;
+				size.y = flavorSize.y + (80.0f - flavorSize.y) * t;
+			} else{
+				// 4. 右上で待機 ＆ 消失
+				pos = {1050.0f, 120.0f};
+				size = {250.0f, 80.0f};
+
+				if(isExiting_){
+					// ★エラー回避：マクロ競合を避けるため、std::maxの代わりに三項演算子を使用
+					float rawT = (0.5f - exitTimer_) / 0.5f;
+					float t = (rawT > 0.0f)?rawT:0.0f; // std::max(0.0f, rawT) と同等
+
+					color.w = t;
+					pos.x += (1.0f - t) * 30.0f; // 右へスライドして消える
+				}
+			}
+
+			currentFlavor->SetPosition(pos);
+			currentFlavor->SetSize(size);
+			currentFlavor->SetColor(color);
+			currentFlavor->Update();
+			currentFlavor->Draw();
+
+			// --- 2枚目（Guide: 操作説明）のアニメーション ---
+			if(displayTimer_ > 3.5f && currentGuide){
+				Vector2 posG = {640.0f, 360.0f}; // 画面中央
+				Vector2 sizeG = guideSize;
+				Vector4 colorG = {1.0f, 1.0f, 1.0f, 1.0f};
+
+				// 出現フェードイン (0.3s)
+				// ★エラー回避：std::minの代わりに三項演算子を使用
+				float rawFade = (displayTimer_ - 3.5f) / 0.3f;
+				float fadeIn = (rawFade < 1.0f)?rawFade:1.0f; // std::min(1.0f, rawFade) と同等
+				colorG.w = fadeIn;
+
+				if(isExiting_){
+					// 消失フェードアウト（1枚目と同期）
+					float rawT = (0.5f - exitTimer_) / 0.5f;
+					float t = (rawT > 0.0f)?rawT:0.0f;
+
+					colorG.w = t;
+					posG.y -= (1.0f - t) * 20.0f; // 上へ浮きながら消える
+				}
+
+				currentGuide->SetPosition(posG);
+				currentGuide->SetSize(sizeG);
+				currentGuide->SetColor(colorG);
+				currentGuide->Update();
+				currentGuide->Draw();
+			}
+		}
+
+		// スキップUI（リターンキー）は常に表示
+		skipUI_->Update();
+		skipUI_->Draw();
+	} else{
+		// ゲーム本編のUI表示（既存の処理）
+		timeDisplay_.Draw();
+		for(auto& e : uiElements_){
+			e.sprite->Update();
+			e.sprite->Draw();
+		}
+	}
+
+	fade_.Draw();
+}
+
+
+// =====================================================
+// 終了
+// =====================================================
+
+void GamePlayScene::Finalize(){
+	if(audio_){
+		audio_->StopBGM();
+		audio_->StopAllSE();
+	}
+	if(videoPlayer_) videoPlayer_->Finalize();
+	ParticleManager::GetInstance()->ClearAllGroups();
+}

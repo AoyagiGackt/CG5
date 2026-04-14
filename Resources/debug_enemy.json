@@ -1,0 +1,14 @@
+{
+  "spawn_interval": 180,
+  "max_enemy": 10,
+  "cond_thresh_a_0": 70,
+  "cond_thresh_a_1": 20,
+  "cond_thresh_a_2": 20,
+  "cond_thresh_a_3": 20,
+  "cond_thresh_a_4": 70,
+  "cond_thresh_b_0": 0,
+  "cond_thresh_b_1": 70,
+  "cond_thresh_b_2": 70,
+  "cond_thresh_b_3": 70,
+  "cond_thresh_b_4": 0
+}
