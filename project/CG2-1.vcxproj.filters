@@ -724,9 +724,6 @@
     <ClCompile Include="engin\game\cpp\Bullet.cpp">
       <Filter>ソースファイル\Game\Bullet</Filter>
     </ClCompile>
-    <ClCompile Include="engin\game\cpp\Condition.cpp">
-      <Filter>ソースファイル\Game\Condition</Filter>
-    </ClCompile>
     <ClCompile Include="engin\game\cpp\PlayerManager.cpp">
       <Filter>ソースファイル\Game\Player</Filter>
     </ClCompile>
@@ -742,32 +739,17 @@
     <ClCompile Include="engin\graphics\cpp\ShadowManager.cpp">
       <Filter>ソースファイル\Engine\Manager</Filter>
     </ClCompile>
-    <ClCompile Include="engin\game\cpp\BuffManager.cpp">
-      <Filter>ソースファイル\Game\Buff</Filter>
-    </ClCompile>
-    <ClCompile Include="engin\game\cpp\SpecialMove.cpp">
-      <Filter>ソースファイル\Game\Player\SpecialMove</Filter>
-    </ClCompile>
-    <ClCompile Include="engin\game\cpp\TeleportBomb.cpp">
-      <Filter>ソースファイル\Game\Player\SpecialMove</Filter>
-    </ClCompile>
     <ClCompile Include="engin\game\cpp\ScoreManager.cpp">
       <Filter>ソースファイル\Game\UI\score</Filter>
     </ClCompile>
     <ClCompile Include="engin\graphics\cpp\MapChipField.cpp">
       <Filter>ソースファイル\Game\MapChip</Filter>
     </ClCompile>
-    <ClCompile Include="engin\game\cpp\Turret.cpp">
-      <Filter>ソースファイル\Game\Player\tullet</Filter>
-    </ClCompile>
     <ClCompile Include="engin\game\cpp\ScoreDisplay.cpp">
       <Filter>ソースファイル\Game\UI\score</Filter>
     </ClCompile>
     <ClCompile Include="engin\game\cpp\TimeDisplay.cpp">
       <Filter>ソースファイル\Game\UI\Time</Filter>
-    </ClCompile>
-    <ClCompile Include="engin\game\cpp\EmojiUI.cpp">
-      <Filter>ソースファイル\Game\UI\emoji</Filter>
     </ClCompile>
     <ClCompile Include="engin\game\cpp\GameOverScene.cpp">
       <Filter>ソースファイル\Game\Scene</Filter>
@@ -783,7 +765,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Yaruyo.h" />
     <ClInclude Include="engin\graphics\h\D3DResourceLeakChecker.h">
       <Filter>ヘッダーファイル\Engine\Base</Filter>
     </ClInclude>
@@ -931,9 +912,6 @@
     <ClInclude Include="engin\game\h\Bullet.h">
       <Filter>ヘッダーファイル\Game\Bullet</Filter>
     </ClInclude>
-    <ClInclude Include="engin\game\h\Condition.h">
-      <Filter>ヘッダーファイル\Game\Condition</Filter>
-    </ClInclude>
     <ClInclude Include="engin\game\h\PlayerManager.h">
       <Filter>ヘッダーファイル\Game\Player</Filter>
     </ClInclude>
@@ -949,32 +927,17 @@
     <ClInclude Include="engin\graphics\h\ImguiControl.h">
       <Filter>ヘッダーファイル\Engine\ImGui</Filter>
     </ClInclude>
-    <ClInclude Include="engin\game\h\BuffManager.h">
-      <Filter>ヘッダーファイル\Game\Buff</Filter>
-    </ClInclude>
     <ClInclude Include="engin\graphics\h\ShadowManager.h">
       <Filter>ヘッダーファイル\Engine\Manager</Filter>
     </ClInclude>
-    <ClInclude Include="engin\game\h\SpecialMove.h">
-      <Filter>ヘッダーファイル\Game\Player\SpecialMove</Filter>
-    </ClInclude>
-    <ClInclude Include="engin\game\h\TeleportBomb.h">
-      <Filter>ヘッダーファイル\Game\Player\SpecialMove</Filter>
-    </ClInclude>
     <ClInclude Include="engin\game\h\ScoreManager.h">
       <Filter>ヘッダーファイル\Game\UI\score</Filter>
-    </ClInclude>
-    <ClInclude Include="engin\game\h\Turret.h">
-      <Filter>ヘッダーファイル\Game\Player\tullet</Filter>
     </ClInclude>
     <ClInclude Include="engin\game\h\ScoreDisplay.h">
       <Filter>ヘッダーファイル\Game\UI\score</Filter>
     </ClInclude>
     <ClInclude Include="engin\game\h\TimeDisplay.h">
       <Filter>ヘッダーファイル\Game\UI\Time</Filter>
-    </ClInclude>
-    <ClInclude Include="engin\game\h\EmojiUI.h">
-      <Filter>ヘッダーファイル\Game\UI\emoji</Filter>
     </ClInclude>
     <ClInclude Include="engin\game\h\PauseScene.h">
       <Filter>ヘッダーファイル\Game\Scene</Filter>
@@ -990,7 +953,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="cpp.hint" />
     <None Include="Resources\shaders\object3d\Object3d.hlsli">
       <Filter>Shader</Filter>
     </None>
@@ -1068,9 +1030,6 @@
     <Filter Include="ヘッダーファイル\Game\Player">
       <UniqueIdentifier>{1505dab3-a622-48a2-8396-ad4090aee723}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Game\Player\SpecialMove">
-      <UniqueIdentifier>{cae020e5-62d4-4adb-954f-a1d6df844628}</UniqueIdentifier>
-    </Filter>
     <Filter Include="ヘッダーファイル\Game\Enemy">
       <UniqueIdentifier>{63cf37ff-9a55-49e4-a806-28f0aaae97d5}</UniqueIdentifier>
     </Filter>
@@ -1082,12 +1041,6 @@
     </Filter>
     <Filter Include="ヘッダーファイル\Game\Bullet">
       <UniqueIdentifier>{545054a3-4535-472d-adef-3f93593bdc2e}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ヘッダーファイル\Game\Condition">
-      <UniqueIdentifier>{87654321-dcba-hgfe-dcba-0987654321ba}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ヘッダーファイル\Game\Buff">
-      <UniqueIdentifier>{42f19d1b-6456-4328-b7e2-feab8c395184}</UniqueIdentifier>
     </Filter>
     <Filter Include="Shader">
       <UniqueIdentifier>{5d7f0c2e-2503-48b0-960f-497607245bdf}</UniqueIdentifier>
@@ -1155,9 +1108,6 @@
     <Filter Include="ソースファイル\Game\Player">
       <UniqueIdentifier>{a02a70aa-0ed8-4500-9d12-8e0132db49d7}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Game\Player\SpecialMove">
-      <UniqueIdentifier>{bb0155a3-c2b3-4d8b-931f-1e4044c81356}</UniqueIdentifier>
-    </Filter>
     <Filter Include="ソースファイル\Game\Scene">
       <UniqueIdentifier>{7a55b995-e6ae-4d77-aae7-b2be38d96b58}</UniqueIdentifier>
     </Filter>
@@ -1166,12 +1116,6 @@
     </Filter>
     <Filter Include="ソースファイル\Game\Bullet">
       <UniqueIdentifier>{e3e5a56b-77a2-4217-9b41-f4330a256c2e}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソースファイル\Game\Condition">
-      <UniqueIdentifier>{12345678-abcd-efgh-ijkl-1234567890ab}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソースファイル\Game\Buff">
-      <UniqueIdentifier>{8d036067-c88c-450f-af8c-53dbf3911df8}</UniqueIdentifier>
     </Filter>
     <Filter Include="ソースファイル\Game\UI">
       <UniqueIdentifier>{78452b25-04a6-43d9-a478-cdcea1e2bd58}</UniqueIdentifier>
@@ -1182,9 +1126,6 @@
     <Filter Include="ソースファイル\Game\UI\Time">
       <UniqueIdentifier>{698cb475-a481-4df0-b37f-38ba8b68b245}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Game\UI\emoji">
-      <UniqueIdentifier>{9164829e-4932-41d7-afb2-81c9f98f94bd}</UniqueIdentifier>
-    </Filter>
     <Filter Include="ヘッダーファイル\Game\UI">
       <UniqueIdentifier>{93d69db8-93f0-404e-8465-54301225e876}</UniqueIdentifier>
     </Filter>
@@ -1193,15 +1134,6 @@
     </Filter>
     <Filter Include="ヘッダーファイル\Game\UI\Time">
       <UniqueIdentifier>{01d1ea84-4aea-430d-a6cd-edf4af6ca31b}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ヘッダーファイル\Game\UI\emoji">
-      <UniqueIdentifier>{32ced740-9ce2-441b-b1ec-265750f244aa}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ヘッダーファイル\Game\Player\tullet">
-      <UniqueIdentifier>{8a44ff31-4f73-462e-a419-011d1cfd504a}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソースファイル\Game\Player\tullet">
-      <UniqueIdentifier>{cc80790a-8f09-4b37-a1da-acfc8582bd38}</UniqueIdentifier>
     </Filter>
     <Filter Include="ソースファイル\Game\Particle">
       <UniqueIdentifier>{cc74903e-1623-4a8d-954a-3ac36574ce1b}</UniqueIdentifier>
