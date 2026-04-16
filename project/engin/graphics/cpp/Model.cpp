@@ -13,6 +13,7 @@ void Model::Initialize(ModelCommon* modelCommon, const std::string& modelFilePat
     textureFilePath_ = textureFilePath;
 
     TextureManager::GetInstance()->LoadTexture(textureFilePath);
+    isCubemap_ = TextureManager::GetInstance()->GetMetaData(textureFilePath).IsCubemap();
     LoadObjFile(modelFilePath);
 
     ID3D12Device* device = modelCommon_->GetDxCommon()->GetDevice();
@@ -50,7 +51,10 @@ void Model::Draw(ModelCommon* modelCommon)
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
     D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle = TextureManager::GetInstance()->GetSrvHandleGPU(textureFilePath_);
+    // Texture2D (slot 2) と TextureCube (slot 5) の両方に同じハンドルをセット。
+    // シェーダー側の useCubemap フラグで実際にアクセスするスロットを切り替える。
     commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandle);
+    commandList->SetGraphicsRootDescriptorTable(5, textureSrvHandle);
 
     commandList->DrawInstanced(static_cast<UINT>(vertices_.size()), 1, 0, 0);
 }

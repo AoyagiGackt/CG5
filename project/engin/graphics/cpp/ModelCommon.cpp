@@ -28,7 +28,13 @@ void ModelCommon::Initialize(DirectXCommon* dxCommon)
     shadowRange[0].RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     shadowRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[5] = {};
+    D3D12_DESCRIPTOR_RANGE cubemapRange[1] = {};
+    cubemapRange[0].BaseShaderRegister                = 2; // t2
+    cubemapRange[0].NumDescriptors                    = 1;
+    cubemapRange[0].RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    cubemapRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_PARAMETER rootParameters[6] = {};
     // 0: Material (PS, b0)
     rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -51,6 +57,11 @@ void ModelCommon::Initialize(DirectXCommon* dxCommon)
     rootParameters[4].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[4].DescriptorTable.pDescriptorRanges   = shadowRange;
     rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
+    // 5: TextureCube (PS, t2) ― 天球キューブマップ用
+    rootParameters[5].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[5].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[5].DescriptorTable.pDescriptorRanges   = cubemapRange;
+    rootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
 
     // 静的サンプラー（s0: 通常テクスチャ、s1: シャドウマップ比較用）
     D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
@@ -75,7 +86,7 @@ void ModelCommon::Initialize(DirectXCommon* dxCommon)
     D3D12_ROOT_SIGNATURE_DESC rsDesc {};
     rsDesc.Flags           = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
     rsDesc.pParameters     = rootParameters;
-    rsDesc.NumParameters   = _countof(rootParameters);
+    rsDesc.NumParameters   = 6;
     rsDesc.pStaticSamplers = staticSamplers;
     rsDesc.NumStaticSamplers = _countof(staticSamplers);
 

@@ -7,9 +7,11 @@ void Skydome::Initialize(ModelCommon* modelCommon, Model* model)
     object_->Initialize(modelCommon);
     object_->SetModel(model);
 
-    object_->SetScale({ 50.0f, 50.0f, 50.0f });
+    // SkyDome.obj の球半径は約500unit。farClip=100 内に収めるため 0.19 倍(半径≒95) にする
+    object_->SetScale({ 0.19f, 0.19f, 0.19f });
 
     object_->SetEnableLighting(false);
+    object_->SetUseCubemap(true);
 }
 
 void Skydome::Update(Camera* camera, float timeRatio)

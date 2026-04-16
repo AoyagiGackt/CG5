@@ -152,6 +152,10 @@ public:
         if (materialData_) { materialData_->shininess = shininess; }
     }
 
+    void SetUseCubemap(bool enable) {
+        if (materialData_) { materialData_->useCubemap = enable ? 1 : 0; }
+    }
+
 private:
     /**
      * @brief GPUに送るための座標変換行列データ
@@ -170,7 +174,8 @@ private:
         Vector4    color;          ///< 基本色（RGBA）
         int        enableLighting; ///< ライティング有効フラグ（1:有効, 0:無効）
         int        shadingType;    ///< シェーディング種類（0:Lambert, 1:HalfLambert）
-        float      padding[2];     ///< 16バイトアライメント
+        int        useCubemap;     ///< キューブマップサンプリング（1:有効）
+        float      padding;        ///< 16バイトアライメント
         Matrix4x4  uvTransform;    ///< UV変換行列
         Vector3    specularColor;  ///< スペキュラ反射色
         float      shininess;      ///< 光沢度（大きいほどシャープ）

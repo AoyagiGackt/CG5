@@ -86,4 +86,7 @@ private:
 
     /** @brief CPU側で保持するモデルの全頂点データの配列 */
     std::vector<VertexData> vertices_;
+
+    /** @brief テクスチャがキューブマップかどうか（スロット選択に使用） */
+    bool isCubemap_ = false;
 };

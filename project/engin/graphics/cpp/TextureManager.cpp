@@ -32,30 +32,38 @@ void TextureManager::LoadTexture(const std::string& filePath)
     ID3D12Device* device = dxCommon_->GetDevice();
 
     // 画像ファイルを読み込む
-    DirectX::ScratchImage image {};
     std::wstring filePathW = StringUtility::ConvertString(filePath);
 
     // 拡張子を取得して小文字化
     std::string ext = filePath.substr(filePath.find_last_of('.') + 1);
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
 
-    // GIFはパレット形式のためFORCE_SRGBが使えない
-    DirectX::WIC_FLAGS wicFlags = (ext == "gif") ? DirectX::WIC_FLAGS_DEFAULT_SRGB : DirectX::WIC_FLAGS_FORCE_SRGB;
+    // 最終的な画像データを格納するScratchImage
+    DirectX::ScratchImage finalImage {};
+    HRESULT hr;
 
-    HRESULT hr = DirectX::LoadFromWICFile(filePathW.c_str(), wicFlags, nullptr, image);
-    assert(SUCCEEDED(hr));
-
-    // ミップマップ生成。TEX_FILTER_DEFAULT で広いフォーマットに対応し、
-    // 失敗した場合（非対応フォーマット・奇数サイズ等）は元画像をミップレベル1として使用する
-    DirectX::ScratchImage mipImages {};
-    hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(), image.GetMetadata(), DirectX::TEX_FILTER_BOX, 0, mipImages);
-    if (FAILED(hr)) {
-        hr = mipImages.InitializeFromImage(*image.GetImages());
+    if (ext == "dds") {
+        // DDSファイルはミップマップが埋め込み済みのためそのまま読み込む
+        hr = DirectX::LoadFromDDSFile(filePathW.c_str(), DirectX::DDS_FLAGS_NONE, nullptr, finalImage);
         assert(SUCCEEDED(hr));
+    } else {
+        // WICファイル（PNG/JPG等）はミップマップを生成する
+        DirectX::ScratchImage image {};
+        // GIFはパレット形式のためFORCE_SRGBが使えない
+        DirectX::WIC_FLAGS wicFlags = (ext == "gif") ? DirectX::WIC_FLAGS_DEFAULT_SRGB : DirectX::WIC_FLAGS_FORCE_SRGB;
+        hr = DirectX::LoadFromWICFile(filePathW.c_str(), wicFlags, nullptr, image);
+        assert(SUCCEEDED(hr));
+
+        // ミップマップ生成。失敗した場合（非対応フォーマット・奇数サイズ等）は元画像をミップレベル1として使用する
+        hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(), image.GetMetadata(), DirectX::TEX_FILTER_BOX, 0, finalImage);
+        if (FAILED(hr)) {
+            hr = finalImage.InitializeFromImage(*image.GetImages());
+            assert(SUCCEEDED(hr));
+        }
     }
 
     // リソース作成
-    const DirectX::TexMetadata& metadata = mipImages.GetMetadata();
+    const DirectX::TexMetadata& metadata = finalImage.GetMetadata();
     D3D12_RESOURCE_DESC resourceDesc {};
     resourceDesc.Width = UINT(metadata.width);
     resourceDesc.Height = UINT(metadata.height);
@@ -80,28 +88,32 @@ void TextureManager::LoadTexture(const std::string& filePath)
         IID_PPV_ARGS(&resource));
     assert(SUCCEEDED(hr));
 
-    // データ転送
-    for (size_t mipLevel = 0; mipLevel < metadata.mipLevels; ++mipLevel) {
-        const DirectX::Image* img = mipImages.GetImage(mipLevel, 0, 0);
-        resource->WriteToSubresource(
-            UINT(mipLevel),
-            nullptr,
-            img->pixels,
-            UINT(img->rowPitch),
-            UINT(img->slicePitch));
+    // データ転送（2Dテクスチャ・キューブマップ両対応）
+    for (size_t arrayIndex = 0; arrayIndex < metadata.arraySize; ++arrayIndex) {
+        for (size_t mipLevel = 0; mipLevel < metadata.mipLevels; ++mipLevel) {
+            const DirectX::Image* img = finalImage.GetImage(mipLevel, arrayIndex, 0);
+            UINT subresource = D3D12CalcSubresource(
+                UINT(mipLevel), UINT(arrayIndex), 0,
+                UINT(metadata.mipLevels), UINT(metadata.arraySize));
+            resource->WriteToSubresource(
+                subresource,
+                nullptr,
+                img->pixels,
+                UINT(img->rowPitch),
+                UINT(img->slicePitch));
+        }
     }
 
-    // SRV作成
-    
-    // 空いているSRVインデックスをもらう
+    // SRV作成（キューブマップか2Dテクスチャかで種別を分ける）
     uint32_t srvIndex = SrvManager::GetInstance()->Allocate();
 
-    // SRV生成を依頼
-    SrvManager::GetInstance()->CreateSRVforTexture2D(
-        srvIndex,
-        resource.Get(), // 作成したリソース
-        metadata.format,
-        UINT(metadata.mipLevels));
+    if (metadata.IsCubemap()) {
+        SrvManager::GetInstance()->CreateSRVforTextureCube(
+            srvIndex, resource.Get(), metadata.format, UINT(metadata.mipLevels));
+    } else {
+        SrvManager::GetInstance()->CreateSRVforTexture2D(
+            srvIndex, resource.Get(), metadata.format, UINT(metadata.mipLevels));
+    }
 
     // データ保存
     TextureData& data = textureDatas_[filePath];

@@ -34,6 +34,7 @@
 #include "MapChipField.h"
 #include "Player.h"
 #include "PlayerManager.h"
+#include "Skydome.h"
 #include "hoge.h"
 
 /**
@@ -92,6 +93,10 @@ private:
 	std::unique_ptr<Model> modelEnemy_;
 	std::unique_ptr<Model> modelBullet_;
 	std::unique_ptr<Model> modelBeam_;
+	std::unique_ptr<Model> modelSkydome_;
+
+	// --- 天球 ---
+	std::unique_ptr<Skydome> skydome_;
 
 	// --- ゲームオブジェクト群 ---
 	std::vector<std::unique_ptr<GameObject>> gameObjects_;
