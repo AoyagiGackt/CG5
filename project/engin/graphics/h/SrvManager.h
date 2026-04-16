@@ -48,6 +48,15 @@ public:
     void CreateSRVforTexture2D(uint32_t srvIndex, ID3D12Resource* pResource, DXGI_FORMAT Format, UINT MipLevels);
 
     /**
+     * @brief 指定したインデックスの場所に、キューブマップ用のSRVを生成する
+     * @param srvIndex Allocate()で確保したインデックス
+     * @param pResource SRVを紐づけるGPUリソース（キューブマップテクスチャ）
+     * @param Format テクスチャのフォーマット（DXGI_FORMAT）
+     * @param MipLevels ミップマップのレベル数
+     */
+    void CreateSRVforTextureCube(uint32_t srvIndex, ID3D12Resource* pResource, DXGI_FORMAT Format, UINT MipLevels);
+
+    /**
      * @brief マネージャーの終了処理。デスクリプタヒープを解放する
      */
     void Finalize();

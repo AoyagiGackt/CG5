@@ -1,7 +1,8 @@
 #include "Object3d.hlsli"
 
-Texture2D<float4> gTexture    : register(t0);
-Texture2D<float>  gShadowMap  : register(t1); // シャドウマップ（深度テクスチャ）
+Texture2D<float4>   gTexture   : register(t0);
+Texture2D<float>    gShadowMap : register(t1); // シャドウマップ（深度テクスチャ）
+TextureCube<float4> gCubemap   : register(t2); // キューブマップ（天球用）
 SamplerState               gSampler       : register(s0);
 SamplerComparisonState     gShadowSampler : register(s1); // 比較サンプラー（PCF用）
 
@@ -13,7 +14,8 @@ struct Material
     float4   color;
     int      enableLighting;
     int      shadingType;    // 0:Lambert  1:HalfLambert
-    float2   padding;
+    int      useCubemap;     // 1:キューブマップサンプリング（天球用）
+    float    padding;
     float4x4 uvTransform;
     float3   specularColor;
     float    shininess;
@@ -92,9 +94,22 @@ PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
 
-    float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
-    float4 textureColor  = gTexture.Sample(gSampler, transformedUV.xy);
-    float4 baseColor     = gMaterial.color * textureColor;
+    float4 textureColor;
+    if (gMaterial.useCubemap != 0)
+    {
+        // キューブマップ: カメラから頂点への方向ベクトルでサンプリング
+        float3 dir = normalize(input.worldPos - gMaterial.cameraWorldPos);
+        float3 hdr = gCubemap.Sample(gSampler, dir).rgb;
+        // Reinhard トーンマッピング（BC6H UF16 のHDR値を [0,1] に変換）
+        hdr = hdr / (hdr + 1.0f);
+        textureColor = float4(hdr, 1.0f);
+    }
+    else
+    {
+        float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
+        textureColor = gTexture.Sample(gSampler, transformedUV.xy);
+    }
+    float4 baseColor = gMaterial.color * textureColor;
 
     if (gMaterial.enableLighting != 0)
     {

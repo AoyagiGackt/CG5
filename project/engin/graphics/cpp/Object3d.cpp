@@ -50,6 +50,7 @@ void Object3d::Initialize(ModelCommon* modelCommon)
     materialData_->color          = { 1.0f, 1.0f, 1.0f, 1.0f };
     materialData_->enableLighting = true;
     materialData_->shadingType    = 1; // HalfLambert
+    materialData_->useCubemap     = 0;
     materialData_->uvTransform    = MakeIdentity4x4();
     materialData_->specularColor  = { 1.0f, 1.0f, 1.0f }; // 白いハイライト
     materialData_->shininess      = 32.0f;                  // ほどよい光沢

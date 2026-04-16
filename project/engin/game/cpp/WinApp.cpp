@@ -36,6 +36,9 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 
 void WinApp::Initialize()
 {
+    // DPI スケーリングを無効化して実ピクセルで描画する
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
 
     // WNDCLASSWを使用

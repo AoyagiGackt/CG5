@@ -27,8 +27,15 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon)
     shadowRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     shadowRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    // 5つ（Object3dPS.hlsl のバインディングに合わせる）
-    D3D12_ROOT_PARAMETER rootParameters[5] = {};
+    // t2: キューブマップ SRV（Object3dPS.hlsl が要求するため宣言が必要）
+    D3D12_DESCRIPTOR_RANGE cubemapRange[1] = {};
+    cubemapRange[0].BaseShaderRegister = 2; // t2
+    cubemapRange[0].NumDescriptors = 1;
+    cubemapRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    cubemapRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    // 6つ（Object3dPS.hlsl のバインディングに合わせる）
+    D3D12_ROOT_PARAMETER rootParameters[6] = {};
 
     // Material
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -56,6 +63,12 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon)
     rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[4].DescriptorTable.pDescriptorRanges = shadowRange;
     rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
+
+    // TextureCube (t2) — スプライトは useCubemap=false なので実際にはアクセスしない
+    rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[5].DescriptorTable.pDescriptorRanges = cubemapRange;
+    rootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
 
     descriptionRootSignature.pParameters = rootParameters;
     descriptionRootSignature.NumParameters = _countof(rootParameters);

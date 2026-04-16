@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
-#include <commdlg.h>  // GetOpenFileName
+#include <commdlg.h>
 #pragma comment(lib, "comdlg32.lib")
 #include "EnemyDeathEffect.h"
 #include "bulletHitEffect.h"
@@ -58,6 +58,12 @@ void GamePlayScene::Initialize(DirectXCommon* dxCommon,Input* input,Audio* audio
 	modelBeam_ = std::make_unique<Model>();
 	modelBeam_->Initialize(modelCommon_.get(),"Resources/beam/beam.obj","Resources/beam/beam.png");
 
+	modelSkydome_ = std::make_unique<Model>();
+	modelSkydome_->Initialize(modelCommon_.get(),"Resources/SkyDome/SkyDome.obj","Resources/rostock_laage_airport_4k.dds");
+
+	skydome_ = std::make_unique<Skydome>();
+	skydome_->Initialize(modelCommon_.get(),modelSkydome_.get());
+
 	playerManager_ = std::make_unique<PlayerManager>();
 	playerManager_->Initialize(modelCommon_.get(),modelPlayer_.get(),input_,mapField_.get(),camera_.get());
 
@@ -100,6 +106,9 @@ void GamePlayScene::Update(){
 
 	enemyManager_->SetDebugSpawnDisabled(true); // 敵出現無効化
 	float cameraPosX = camera_->GetTranslate().x;
+
+	// 天球の更新
+	skydome_->Update(camera_.get(), timeRatio);
 
 	// ライト・シャドウの更新
 	objectCommon_->UpdateLight(timeRatio);
@@ -568,6 +577,31 @@ void GamePlayScene::UpdateDebugUI(){
 		}
 	}
 	ImGui::End();
+
+	// =====================================================
+	// Camera Control（常時表示・画面上部中央）
+	// =====================================================
+	ImGui::SetNextWindowPos(ImVec2(400,0),ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(300,130),ImGuiCond_Once);
+	ImGui::Begin("Camera Control");
+
+	Vector3 camPos = camera_->GetTranslate();
+	Vector3 camRot = camera_->GetRotate();
+
+	if(ImGui::DragFloat3("Pos",&camPos.x,0.1f)) camera_->SetTranslate(camPos);
+	if(ImGui::DragFloat3("Rot",&camRot.x,0.01f)) camera_->SetRotate(camRot);
+
+	ImGui::Spacing();
+	if(ImGui::Button("Center")){
+		camera_->SetTranslate({0.0f,0.0f,0.0f});
+		camera_->SetRotate({0.0f,0.0f,0.0f});
+	}
+	ImGui::SameLine();
+	if(ImGui::Button("Save##cam")) SaveCameraParams();
+	ImGui::SameLine();
+	if(ImGui::Button("Load##cam")) LoadCameraParams();
+
+	ImGui::End();
 #endif
 }
 
@@ -789,6 +823,9 @@ void GamePlayScene::Draw(){
 	objectCommon_->SetDefaultLight(dxCommon_->GetCommandList());
 	shadowManager_->SetShadowMap(dxCommon_->GetCommandList(),SrvManager::GetInstance());
 
+	// 天球（最初に描画して他のオブジェクトの背景とする）
+	skydome_->Draw();
+
 	playerManager_->Draw();
 	enemyManager_->Draw();
 
@@ -809,8 +846,7 @@ void GamePlayScene::Draw(){
 	}
 }
 
-
-// DEAD CODE BLOCK REMOVED - tutorials/sprites deleted
+// いつか使うかも
 #if 0
 	if(false){
 		// --- 表示するスプライトと基準サイズの選択 ---
@@ -903,7 +939,7 @@ void GamePlayScene::Draw(){
 				size = {250.0f, 80.0f};
 
 				if(isExiting_){
-					// ★エラー回避：マクロ競合を避けるため、std::maxの代わりに三項演算子を使用
+					// エラー回避：マクロ競合を避けるため、std::maxの代わりに三項演算子を使用
 					float rawT = (0.5f - exitTimer_) / 0.5f;
 					float t = (rawT > 0.0f)?rawT:0.0f; // std::max(0.0f, rawT) と同等
 
@@ -925,7 +961,7 @@ void GamePlayScene::Draw(){
 				Vector4 colorG = {1.0f, 1.0f, 1.0f, 1.0f};
 
 				// 出現フェードイン (0.3s)
-				// ★エラー回避：std::minの代わりに三項演算子を使用
+				// エラー回避：std::minの代わりに三項演算子を使用
 				float rawFade = (displayTimer_ - 3.5f) / 0.3f;
 				float fadeIn = (rawFade < 1.0f)?rawFade:1.0f; // std::min(1.0f, rawFade) と同等
 				colorG.w = fadeIn;
