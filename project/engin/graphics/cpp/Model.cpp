@@ -4,6 +4,11 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <cctype>
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
 
 using namespace Microsoft::WRL;
 
@@ -14,7 +19,15 @@ void Model::Initialize(ModelCommon* modelCommon, const std::string& modelFilePat
 
     TextureManager::GetInstance()->LoadTexture(textureFilePath);
     isCubemap_ = TextureManager::GetInstance()->GetMetaData(textureFilePath).IsCubemap();
-    LoadObjFile(modelFilePath);
+
+    // 拡張子で読み込み関数を切り替える
+    std::string ext = modelFilePath.substr(modelFilePath.find_last_of('.') + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c){ return std::tolower(c); });
+    if (ext == "obj") {
+        LoadObjFile(modelFilePath);
+    } else {
+        LoadGltfFile(modelFilePath);
+    }
 
     ID3D12Device* device = modelCommon_->GetDxCommon()->GetDevice();
     size_t sizeInBytes = sizeof(VertexData) * vertices_.size();
@@ -51,10 +64,15 @@ void Model::Draw(ModelCommon* modelCommon)
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
     D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle = TextureManager::GetInstance()->GetSrvHandleGPU(textureFilePath_);
-    // Texture2D (slot 2) と TextureCube (slot 5) の両方に同じハンドルをセット。
-    // シェーダー側の useCubemap フラグで実際にアクセスするスロットを切り替える。
     commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandle);
-    commandList->SetGraphicsRootDescriptorTable(5, textureSrvHandle);
+
+    // スロット5（TextureCube）: 環境マップが指定されていればそちらを、なければ通常テクスチャを流用
+    if (!envCubemapFilePath_.empty()) {
+        D3D12_GPU_DESCRIPTOR_HANDLE cubeHandle = TextureManager::GetInstance()->GetSrvHandleGPU(envCubemapFilePath_);
+        commandList->SetGraphicsRootDescriptorTable(5, cubeHandle);
+    } else {
+        commandList->SetGraphicsRootDescriptorTable(5, textureSrvHandle);
+    }
 
     commandList->DrawInstanced(static_cast<UINT>(vertices_.size()), 1, 0, 0);
 }
@@ -140,6 +158,56 @@ void Model::LoadObjFile(const std::string& filePath)
                 vertices_.push_back(faceVertices[0]);
                 vertices_.push_back(faceVertices[i]);
                 vertices_.push_back(faceVertices[i + 1]);
+            }
+        }
+    }
+}
+
+void Model::LoadGltfFile(const std::string& filePath)
+{
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(filePath,
+        aiProcess_Triangulate |
+        aiProcess_FlipUVs |
+        aiProcess_GenSmoothNormals |
+        aiProcess_MakeLeftHanded |
+        aiProcess_FlipWindingOrder);
+
+    assert(scene && scene->mNumMeshes > 0);
+
+    for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
+        aiMesh* mesh = scene->mMeshes[meshIndex];
+
+        for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
+            const aiFace& face = mesh->mFaces[faceIndex];
+
+            for (uint32_t i = 0; i < face.mNumIndices; ++i) {
+                uint32_t vIdx = face.mIndices[i];
+                VertexData vd {};
+
+                vd.position = {
+                    mesh->mVertices[vIdx].x,
+                    mesh->mVertices[vIdx].y,
+                    mesh->mVertices[vIdx].z,
+                    1.0f
+                };
+
+                if (mesh->HasNormals()) {
+                    vd.normal = {
+                        mesh->mNormals[vIdx].x,
+                        mesh->mNormals[vIdx].y,
+                        mesh->mNormals[vIdx].z
+                    };
+                }
+
+                if (mesh->HasTextureCoords(0)) {
+                    vd.texcoord = {
+                        mesh->mTextureCoords[0][vIdx].x,
+                        mesh->mTextureCoords[0][vIdx].y
+                    };
+                }
+
+                vertices_.push_back(vd);
             }
         }
     }

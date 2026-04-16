@@ -32,12 +32,12 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     // Map したまま保持（毎フレーム UpdateLight() で書き換える）
     lightResource_->Map(0, nullptr, reinterpret_cast<void**>(&lightData_));
 
-    // 初期値（UpdateLight(0.0f) と同じ夕焼け設定）
-    lightData_->color            = { 1.0f, 0.70f, 0.40f, 1.0f };
-    lightData_->direction        = { 0.7f, -0.5f, 0.3f };
+    // 固定ライト（白昼光）
+    lightData_->color            = { 1.0f, 1.0f, 1.0f, 1.0f };
+    lightData_->direction        = { 0.5f, -0.8f, 0.3f };
     lightData_->intensity        = 1.0f;
-    lightData_->ambientColor     = { 0.25f, 0.18f, 0.12f };
-    lightData_->ambientIntensity = 0.4f;
+    lightData_->ambientColor     = { 1.0f, 1.0f, 1.0f };
+    lightData_->ambientIntensity = 0.3f;
 }
 
 // =====================================================

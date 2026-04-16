@@ -28,6 +28,7 @@
 #include "SrvManager.h"
 
 // --- ゲームロジック・オブジェクト ---
+#include "Object3d.h"
 #include "Bullet.h"
 #include "EnemyManager.h"
 #include "GameTime.h"
@@ -94,6 +95,10 @@ private:
 	std::unique_ptr<Model> modelBullet_;
 	std::unique_ptr<Model> modelBeam_;
 	std::unique_ptr<Model> modelSkydome_;
+	std::unique_ptr<Model> modelHuman_;
+
+	// --- human オブジェクト ---
+	std::unique_ptr<Object3d> objectHuman_;
 
 	// --- 天球 ---
 	std::unique_ptr<Skydome> skydome_;
@@ -111,12 +116,19 @@ private:
 	bool debugSpawnDisabled_ = false;
 	bool debugEditMode_ = false;
 
+	// --- Human パラメータ ---
+	Vector3 humanPosition_        = { 14.5f, 0.0f, 0.0f };
+	Vector4 humanColor_           = { 0.9f, 0.9f, 0.9f, 1.0f }; // シルバー
+	float   humanEnvMapIntensity_ = 1.0f;
+	float   humanShininess_       = 128.0f;
+	bool    humanUseTexture_      = true;
+
 	std::string playerObjPath_ = "Resources/player/player.obj";
 	std::string playerTexPath_ = "Resources/player/player.png";
 	std::string enemyObjPath_ = "Resources/boss/boss.obj";
 	std::string enemyTexPath_ = "Resources/boss/boss.png";
 
-	enum class SelectedType{ None,Player,Enemy,Camera,EnemySettings,UIElement };
+	enum class SelectedType{ None,Player,Enemy,Camera,EnemySettings,UIElement,Human };
 	SelectedType editorSelectedType_ = SelectedType::None;
 	int editorSelectedIndex_ = -1;
 

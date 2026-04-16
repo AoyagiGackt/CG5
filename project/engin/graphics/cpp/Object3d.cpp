@@ -51,11 +51,12 @@ void Object3d::Initialize(ModelCommon* modelCommon)
     materialData_->enableLighting = true;
     materialData_->shadingType    = 1; // HalfLambert
     materialData_->useCubemap     = 0;
+    materialData_->useTexture     = 1; // デフォルトはテクスチャあり
     materialData_->uvTransform    = MakeIdentity4x4();
     materialData_->specularColor  = { 1.0f, 1.0f, 1.0f }; // 白いハイライト
     materialData_->shininess      = 32.0f;                  // ほどよい光沢
     materialData_->cameraWorldPos = { 0.0f, 0.0f, 0.0f };
-    materialData_->matPad         = 0.0f;
+    materialData_->envMapIntensity = 0.0f;
 }
 
 void Object3d::Update()

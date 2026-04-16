@@ -156,6 +156,14 @@ public:
         if (materialData_) { materialData_->useCubemap = enable ? 1 : 0; }
     }
 
+    void SetUseTexture(bool enable) {
+        if (materialData_) { materialData_->useTexture = enable ? 1 : 0; }
+    }
+
+    void SetEnvMapIntensity(float intensity) {
+        if (materialData_) { materialData_->envMapIntensity = intensity; }
+    }
+
 private:
     /**
      * @brief GPUに送るための座標変換行列データ
@@ -175,12 +183,12 @@ private:
         int        enableLighting; ///< ライティング有効フラグ（1:有効, 0:無効）
         int        shadingType;    ///< シェーディング種類（0:Lambert, 1:HalfLambert）
         int        useCubemap;     ///< キューブマップサンプリング（1:有効）
-        float      padding;        ///< 16バイトアライメント
+        int        useTexture;     ///< テクスチャ色使用フラグ（0:白=色なし, 1:テクスチャあり）
         Matrix4x4  uvTransform;    ///< UV変換行列
         Vector3    specularColor;  ///< スペキュラ反射色
         float      shininess;      ///< 光沢度（大きいほどシャープ）
-        Vector3    cameraWorldPos; ///< カメラのワールド座標（Update()で自動書き込み）
-        float      matPad;         ///< アライメント
+        Vector3    cameraWorldPos;    ///< カメラのワールド座標（Update()で自動書き込み）
+        float      envMapIntensity;  ///< 環境マップ反射強度（0=なし, 1=フル反射）
     };
 
     /** @brief 全オブジェクトで共通して使うカメラのポインタ */
