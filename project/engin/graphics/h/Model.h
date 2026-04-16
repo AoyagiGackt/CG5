@@ -64,6 +64,12 @@ public:
      */
     size_t GetVertexCount() const { return vertices_.size(); }
 
+    /**
+     * @brief 環境マップ用キューブマップを設定する（事前にLoadTextureが呼ばれている必要あり）
+     * @param filePath キューブマップの DDS ファイルパス
+     */
+    void SetEnvCubemap(const std::string& filePath) { envCubemapFilePath_ = filePath; }
+
 private:
     
     /**
@@ -71,6 +77,12 @@ private:
      * @param filePath 読み込むOBJファイルのパス
      */
     void LoadObjFile(const std::string& filePath);
+
+    /**
+     * @brief Assimpを使ってGLTF/FBX等のメッシュを読み込む内部関数
+     * @param filePath 読み込むファイルのパス
+     */
+    void LoadGltfFile(const std::string& filePath);
 
     /** @brief 共通描画設定のポインタ（デバイスやコマンドリストの取得に使用） */
     ModelCommon* modelCommon_ = nullptr;
@@ -89,4 +101,7 @@ private:
 
     /** @brief テクスチャがキューブマップかどうか（スロット選択に使用） */
     bool isCubemap_ = false;
+
+    /** @brief 環境マップ用キューブマップのファイルパス（空なら通常テクスチャをスロット5に流用） */
+    std::string envCubemapFilePath_;
 };
