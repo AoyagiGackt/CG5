@@ -44,9 +44,17 @@ public: // メンバ関数
 
     /**
      * @brief 描画後処理
-     * @note バックバッファをPresentation状態に戻し、コマンドの実行、画面の入れ替え（Flip）、FPS固定の待ちを行います
+     * @note ポストプロセスをスワップチェーンに描画する。終了後もスワップチェーンはRenderTarget状態のままにする。
+     * オーバーレイ描画（ImGui等）の後に EndDraw() を呼ぶこと。
      */
     void PostDraw();
+
+    /**
+     * @brief 描画終了処理
+     * @note スワップチェーンをPresent状態に遷移させ、コマンド実行・画面Flip・GPU同期を行う。
+     * PostDraw() → オーバーレイ描画 → EndDraw() の順で呼ぶこと。
+     */
+    void EndDraw();
 
     /**
      * @brief シェーダーファイルをコンパイルする

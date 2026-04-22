@@ -131,7 +131,6 @@ void DirectXCommon::PreDraw()
 
 void DirectXCommon::PostDraw()
 {
-    HRESULT hr;
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
 
     if (postProcessPass_) {
@@ -158,16 +157,8 @@ void DirectXCommon::PostDraw()
         commandList_->RSSetViewports(1, &vp);
         commandList_->RSSetScissorRects(1, &scissor);
 
-        // ポストプロセス描画
+        // ポストプロセス描画（スワップチェーンはRenderTargetのまま維持）
         postProcessPass_->Draw(commandList_.Get(), SrvManager::GetInstance(), renderTextureSrvIndex_);
-
-        // SwapChain: RENDER_TARGET → PRESENT
-        D3D12_RESOURCE_BARRIER toPresent = {};
-        toPresent.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        toPresent.Transition.pResource = swapChainResoures_[backBufferIndex].Get();
-        toPresent.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        toPresent.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-        commandList_->ResourceBarrier(1, &toPresent);
     } else {
         // RenderTexture: RENDER_TARGET → COPY_SOURCE
         // SwapChain:     PRESENT      → COPY_DEST
@@ -185,7 +176,7 @@ void DirectXCommon::PostDraw()
         commandList_->CopyResource(swapChainResoures_[backBufferIndex].Get(), renderTextureResource_.Get());
 
         // RenderTexture: COPY_SOURCE → PIXEL_SHADER_RESOURCE
-        // SwapChain:     COPY_DEST   → PRESENT
+        // SwapChain:     COPY_DEST   → RENDER_TARGET（EndDrawでPRESENTに遷移）
         D3D12_RESOURCE_BARRIER postCopyBarriers[2] = {};
         postCopyBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         postCopyBarriers[0].Transition.pResource = renderTextureResource_.Get();
@@ -194,9 +185,30 @@ void DirectXCommon::PostDraw()
         postCopyBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         postCopyBarriers[1].Transition.pResource = swapChainResoures_[backBufferIndex].Get();
         postCopyBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        postCopyBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+        postCopyBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
         commandList_->ResourceBarrier(2, postCopyBarriers);
+
+        // バックバッファを描画先に設定（オーバーレイ描画用）
+        commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], false, nullptr);
+        D3D12_VIEWPORT vp = { 0, 0, (float)winApp_->kClientWidth, (float)winApp_->kClientHeight, 0.0f, 1.0f };
+        D3D12_RECT scissor = { 0, 0, (LONG)winApp_->kClientWidth, (LONG)winApp_->kClientHeight };
+        commandList_->RSSetViewports(1, &vp);
+        commandList_->RSSetScissorRects(1, &scissor);
     }
+}
+
+void DirectXCommon::EndDraw()
+{
+    HRESULT hr;
+    UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
+
+    // SwapChain: RENDER_TARGET → PRESENT
+    D3D12_RESOURCE_BARRIER toPresent = {};
+    toPresent.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    toPresent.Transition.pResource = swapChainResoures_[backBufferIndex].Get();
+    toPresent.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    toPresent.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+    commandList_->ResourceBarrier(1, &toPresent);
 
     // コマンドリストを閉じる
     hr = commandList_->Close();

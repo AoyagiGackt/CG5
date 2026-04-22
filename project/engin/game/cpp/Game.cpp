@@ -42,12 +42,16 @@ void MyGame::Draw()
     dxCommon_->PreDraw();
     SrvManager::GetInstance()->PreDraw();
 
-    // 現在のシーンの描画
+    // 現在のシーンの描画（→ レンダーテクスチャ）
     SceneManager::GetInstance()->Draw();
 
+    // ポストプロセス（レンダーテクスチャ → スワップチェーン）
+    dxCommon_->PostDraw();
+
+    // ImGui はポストプロセス後にスワップチェーンへ直接描画
     imguiManager_->Draw(dxCommon_.get());
 
-    dxCommon_->PostDraw();
+    dxCommon_->EndDraw();
 }
 
 void MyGame::Finalize()
