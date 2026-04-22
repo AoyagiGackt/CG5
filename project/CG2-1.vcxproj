@@ -205,6 +205,7 @@
     <ClCompile Include="engin\graphics\cpp\Sprite.cpp" />
     <ClCompile Include="engin\graphics\cpp\TextureManager.cpp" />
     <ClCompile Include="engin\graphics\cpp\Object3dCommon.cpp" />
+    <ClCompile Include="engin\graphics\cpp\PostProcessPass.cpp" />
     <ClCompile Include="engin\graphics\cpp\ShadowManager.cpp" />
     <ClCompile Include="engin\graphics\cpp\Model.cpp" />
     <ClCompile Include="engin\graphics\cpp\Object3d.cpp" />
@@ -249,6 +250,22 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="Resources\shaders\Particle\Particle.VS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Vertex</ShaderType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Resources\shaders\postprocess\PostProcessPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Pixel</ShaderType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Resources\shaders\postprocess\PostProcessVS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Vertex</ShaderType>
@@ -313,6 +330,7 @@
     <ClInclude Include="engin\graphics\h\Sprite.h" />
     <ClInclude Include="engin\graphics\h\TextureManager.h" />
     <ClInclude Include="engin\graphics\h\Object3dCommon.h" />
+    <ClInclude Include="engin\graphics\h\PostProcessPass.h" />
     <ClInclude Include="engin\graphics\h\ShadowManager.h" />
     <ClInclude Include="engin\graphics\h\Model.h" />
     <ClInclude Include="engin\graphics\h\Object3d.h" />

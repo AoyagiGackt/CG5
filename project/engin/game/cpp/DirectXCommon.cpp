@@ -1,6 +1,7 @@
 #include "DirectXCommon.h"
 #include "Input.h"
 #include "Logger.h"
+#include "PostProcessPass.h"
 #include "SrvManager.h"
 #include "StringUtlity.h"
 #include "WinApp.h"
@@ -133,34 +134,69 @@ void DirectXCommon::PostDraw()
     HRESULT hr;
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
 
-    // RenderTexture: RENDER_TARGET → COPY_SOURCE
-    // SwapChain:     PRESENT      → COPY_DEST
-    D3D12_RESOURCE_BARRIER preCopyBarriers[2] = {};
-    preCopyBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    preCopyBarriers[0].Transition.pResource = renderTextureResource_.Get();
-    preCopyBarriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    preCopyBarriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    preCopyBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    preCopyBarriers[1].Transition.pResource = swapChainResoures_[backBufferIndex].Get();
-    preCopyBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    preCopyBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-    commandList_->ResourceBarrier(2, preCopyBarriers);
+    if (postProcessPass_) {
+        // RenderTexture: RENDER_TARGET → PIXEL_SHADER_RESOURCE
+        D3D12_RESOURCE_BARRIER toSRV = {};
+        toSRV.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        toSRV.Transition.pResource = renderTextureResource_.Get();
+        toSRV.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        toSRV.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        commandList_->ResourceBarrier(1, &toSRV);
 
-    // RenderTexture の内容をバックバッファへコピー
-    commandList_->CopyResource(swapChainResoures_[backBufferIndex].Get(), renderTextureResource_.Get());
+        // SwapChain: PRESENT → RENDER_TARGET
+        D3D12_RESOURCE_BARRIER toRT = {};
+        toRT.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        toRT.Transition.pResource = swapChainResoures_[backBufferIndex].Get();
+        toRT.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        toRT.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        commandList_->ResourceBarrier(1, &toRT);
 
-    // RenderTexture: COPY_SOURCE → PIXEL_SHADER_RESOURCE
-    // SwapChain:     COPY_DEST   → PRESENT
-    D3D12_RESOURCE_BARRIER postCopyBarriers[2] = {};
-    postCopyBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    postCopyBarriers[0].Transition.pResource = renderTextureResource_.Get();
-    postCopyBarriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    postCopyBarriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    postCopyBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    postCopyBarriers[1].Transition.pResource = swapChainResoures_[backBufferIndex].Get();
-    postCopyBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    postCopyBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-    commandList_->ResourceBarrier(2, postCopyBarriers);
+        // バックバッファを描画先に設定
+        commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], false, nullptr);
+        D3D12_VIEWPORT vp = { 0, 0, (float)winApp_->kClientWidth, (float)winApp_->kClientHeight, 0.0f, 1.0f };
+        D3D12_RECT scissor = { 0, 0, (LONG)winApp_->kClientWidth, (LONG)winApp_->kClientHeight };
+        commandList_->RSSetViewports(1, &vp);
+        commandList_->RSSetScissorRects(1, &scissor);
+
+        // ポストプロセス描画
+        postProcessPass_->Draw(commandList_.Get(), SrvManager::GetInstance(), renderTextureSrvIndex_);
+
+        // SwapChain: RENDER_TARGET → PRESENT
+        D3D12_RESOURCE_BARRIER toPresent = {};
+        toPresent.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        toPresent.Transition.pResource = swapChainResoures_[backBufferIndex].Get();
+        toPresent.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        toPresent.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+        commandList_->ResourceBarrier(1, &toPresent);
+    } else {
+        // RenderTexture: RENDER_TARGET → COPY_SOURCE
+        // SwapChain:     PRESENT      → COPY_DEST
+        D3D12_RESOURCE_BARRIER preCopyBarriers[2] = {};
+        preCopyBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        preCopyBarriers[0].Transition.pResource = renderTextureResource_.Get();
+        preCopyBarriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        preCopyBarriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        preCopyBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        preCopyBarriers[1].Transition.pResource = swapChainResoures_[backBufferIndex].Get();
+        preCopyBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        preCopyBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+        commandList_->ResourceBarrier(2, preCopyBarriers);
+
+        commandList_->CopyResource(swapChainResoures_[backBufferIndex].Get(), renderTextureResource_.Get());
+
+        // RenderTexture: COPY_SOURCE → PIXEL_SHADER_RESOURCE
+        // SwapChain:     COPY_DEST   → PRESENT
+        D3D12_RESOURCE_BARRIER postCopyBarriers[2] = {};
+        postCopyBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        postCopyBarriers[0].Transition.pResource = renderTextureResource_.Get();
+        postCopyBarriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        postCopyBarriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        postCopyBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        postCopyBarriers[1].Transition.pResource = swapChainResoures_[backBufferIndex].Get();
+        postCopyBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        postCopyBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+        commandList_->ResourceBarrier(2, postCopyBarriers);
+    }
 
     // コマンドリストを閉じる
     hr = commandList_->Close();

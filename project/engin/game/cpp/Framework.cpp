@@ -3,6 +3,7 @@
 #include "MeshManager.h"
 #include "MaterialManager.h"
 #include "LightingMode.h"
+#include "PostProcessPass.h"
 #include "TextureManager.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
@@ -41,6 +42,10 @@ void Framework::Initialize()
             clearColor,
             SrvManager::GetInstance());
     }
+
+    postProcessPass_ = std::make_unique<PostProcessPass>();
+    postProcessPass_->Initialize(dxCommon_.get());
+    dxCommon_->SetPostProcessPass(postProcessPass_.get());
 
     TextureManager::GetInstance()->Initialize(dxCommon_.get());
     ParticleManager::GetInstance()->Initialize(dxCommon_.get());
