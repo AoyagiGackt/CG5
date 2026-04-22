@@ -86,7 +86,6 @@ void DirectXCommon::Finalize()
 
 void DirectXCommon::PreDraw()
 {
-    // コマンドアロケータとリストをリセット
     HRESULT hr = commandAllocator_->Reset();
     assert(SUCCEEDED(hr));
     hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
@@ -101,31 +100,14 @@ void DirectXCommon::PreDraw()
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     commandList_->ResourceBarrier(1, &barrier);
 
-    // 描画先と深度を設定
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
     commandList_->OMSetRenderTargets(1, &renderTextureRtvHandle_, false, &dsvHandle);
-
-    // 画面クリア
     commandList_->ClearRenderTargetView(renderTextureRtvHandle_, renderTextureClearColor_, 0, nullptr);
-
-    // 深度クリア
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-    // ビューポートとシザー矩形の設定
-    D3D12_VIEWPORT viewport = {};
-    viewport.Width = (float)winApp_->kClientWidth;
-    viewport.Height = (float)winApp_->kClientHeight;
-    viewport.TopLeftX = 0;
-    viewport.TopLeftY = 0;
-    viewport.MinDepth = 0.0f;
-    viewport.MaxDepth = 1.0f;
+    D3D12_VIEWPORT viewport = { 0, 0, (float)winApp_->kClientWidth, (float)winApp_->kClientHeight, 0.0f, 1.0f };
+    D3D12_RECT scissorRect = { 0, 0, (LONG)winApp_->kClientWidth, (LONG)winApp_->kClientHeight };
     commandList_->RSSetViewports(1, &viewport);
-
-    D3D12_RECT scissorRect = {};
-    scissorRect.left = 0;
-    scissorRect.right = winApp_->kClientWidth;
-    scissorRect.top = 0;
-    scissorRect.bottom = winApp_->kClientHeight;
     commandList_->RSSetScissorRects(1, &scissorRect);
 }
 
@@ -133,68 +115,29 @@ void DirectXCommon::PostDraw()
 {
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
 
-    if (postProcessPass_) {
-        // RenderTexture: RENDER_TARGET → PIXEL_SHADER_RESOURCE
-        D3D12_RESOURCE_BARRIER toSRV = {};
-        toSRV.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        toSRV.Transition.pResource = renderTextureResource_.Get();
-        toSRV.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        toSRV.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        commandList_->ResourceBarrier(1, &toSRV);
+    // RenderTexture: RENDER_TARGET → PIXEL_SHADER_RESOURCE
+    D3D12_RESOURCE_BARRIER toSRV = {};
+    toSRV.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    toSRV.Transition.pResource = renderTextureResource_.Get();
+    toSRV.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    toSRV.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    commandList_->ResourceBarrier(1, &toSRV);
 
-        // SwapChain: PRESENT → RENDER_TARGET
-        D3D12_RESOURCE_BARRIER toRT = {};
-        toRT.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        toRT.Transition.pResource = swapChainResoures_[backBufferIndex].Get();
-        toRT.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-        toRT.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        commandList_->ResourceBarrier(1, &toRT);
+    // SwapChain: PRESENT → RENDER_TARGET
+    D3D12_RESOURCE_BARRIER toRT = {};
+    toRT.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    toRT.Transition.pResource = swapChainResoures_[backBufferIndex].Get();
+    toRT.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    toRT.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    commandList_->ResourceBarrier(1, &toRT);
 
-        // バックバッファを描画先に設定
-        commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], false, nullptr);
-        D3D12_VIEWPORT vp = { 0, 0, (float)winApp_->kClientWidth, (float)winApp_->kClientHeight, 0.0f, 1.0f };
-        D3D12_RECT scissor = { 0, 0, (LONG)winApp_->kClientWidth, (LONG)winApp_->kClientHeight };
-        commandList_->RSSetViewports(1, &vp);
-        commandList_->RSSetScissorRects(1, &scissor);
+    commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], false, nullptr);
+    D3D12_VIEWPORT vp = { 0, 0, (float)winApp_->kClientWidth, (float)winApp_->kClientHeight, 0.0f, 1.0f };
+    D3D12_RECT scissor = { 0, 0, (LONG)winApp_->kClientWidth, (LONG)winApp_->kClientHeight };
+    commandList_->RSSetViewports(1, &vp);
+    commandList_->RSSetScissorRects(1, &scissor);
 
-        // ポストプロセス描画（スワップチェーンはRenderTargetのまま維持）
-        postProcessPass_->Draw(commandList_.Get(), SrvManager::GetInstance(), renderTextureSrvIndex_);
-    } else {
-        // RenderTexture: RENDER_TARGET → COPY_SOURCE
-        // SwapChain:     PRESENT      → COPY_DEST
-        D3D12_RESOURCE_BARRIER preCopyBarriers[2] = {};
-        preCopyBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        preCopyBarriers[0].Transition.pResource = renderTextureResource_.Get();
-        preCopyBarriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        preCopyBarriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        preCopyBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        preCopyBarriers[1].Transition.pResource = swapChainResoures_[backBufferIndex].Get();
-        preCopyBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-        preCopyBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-        commandList_->ResourceBarrier(2, preCopyBarriers);
-
-        commandList_->CopyResource(swapChainResoures_[backBufferIndex].Get(), renderTextureResource_.Get());
-
-        // RenderTexture: COPY_SOURCE → PIXEL_SHADER_RESOURCE
-        // SwapChain:     COPY_DEST   → RENDER_TARGET（EndDrawでPRESENTに遷移）
-        D3D12_RESOURCE_BARRIER postCopyBarriers[2] = {};
-        postCopyBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        postCopyBarriers[0].Transition.pResource = renderTextureResource_.Get();
-        postCopyBarriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        postCopyBarriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        postCopyBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        postCopyBarriers[1].Transition.pResource = swapChainResoures_[backBufferIndex].Get();
-        postCopyBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        postCopyBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        commandList_->ResourceBarrier(2, postCopyBarriers);
-
-        // バックバッファを描画先に設定（オーバーレイ描画用）
-        commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], false, nullptr);
-        D3D12_VIEWPORT vp = { 0, 0, (float)winApp_->kClientWidth, (float)winApp_->kClientHeight, 0.0f, 1.0f };
-        D3D12_RECT scissor = { 0, 0, (LONG)winApp_->kClientWidth, (LONG)winApp_->kClientHeight };
-        commandList_->RSSetViewports(1, &vp);
-        commandList_->RSSetScissorRects(1, &scissor);
-    }
+    postProcessPass_->Draw(commandList_.Get(), SrvManager::GetInstance(), renderTextureSrvIndex_);
 }
 
 void DirectXCommon::EndDraw()
@@ -210,22 +153,17 @@ void DirectXCommon::EndDraw()
     toPresent.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
     commandList_->ResourceBarrier(1, &toPresent);
 
-    // コマンドリストを閉じる
     hr = commandList_->Close();
     assert(SUCCEEDED(hr));
 
-    // FPS固定
     UpdateFixFPS();
 
-    // GPUコマンド実行
     ID3D12CommandList* commandLists[] = { commandList_.Get() };
     commandQueue_->ExecuteCommandLists(1, commandLists);
 
-    // フリップ (画面更新)
     hr = swapChain_->Present(1, 0);
     assert(SUCCEEDED(hr));
 
-    // フェンス同期
     fenceValue_++;
     commandQueue_->Signal(fence_.Get(), fenceValue_);
 
@@ -233,6 +171,57 @@ void DirectXCommon::EndDraw()
         fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
+}
+
+void DirectXCommon::CreateRenderTexture(UINT width, UINT height, DXGI_FORMAT format, const float* clearColor, SrvManager* srvManager)
+{
+    renderTextureClearColor_[0] = clearColor[0];
+    renderTextureClearColor_[1] = clearColor[1];
+    renderTextureClearColor_[2] = clearColor[2];
+    renderTextureClearColor_[3] = clearColor[3];
+
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width = width;
+    desc.Height = height;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+    D3D12_CLEAR_VALUE clearValue = {};
+    clearValue.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    clearValue.Color[0] = clearColor[0];
+    clearValue.Color[1] = clearColor[1];
+    clearValue.Color[2] = clearColor[2];
+    clearValue.Color[3] = clearColor[3];
+
+    HRESULT hr = device_->CreateCommittedResource(
+        &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &clearValue,
+        IID_PPV_ARGS(&renderTextureResource_));
+    assert(SUCCEEDED(hr));
+
+    // RTV
+    D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
+    rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    rtvHeapDesc.NumDescriptors = 1;
+    hr = device_->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&renderTextureRtvHeap_));
+    assert(SUCCEEDED(hr));
+    renderTextureRtvHandle_ = renderTextureRtvHeap_->GetCPUDescriptorHandleForHeapStart();
+
+    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+    rtvDesc.Format = format;
+    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+    device_->CreateRenderTargetView(renderTextureResource_.Get(), &rtvDesc, renderTextureRtvHandle_);
+
+    // SRV
+    renderTextureSrvIndex_ = srvManager->Allocate();
+    srvManager->CreateSRVforTexture2D(renderTextureSrvIndex_, renderTextureResource_.Get(), format, 1);
 }
 
 IDxcBlob* DirectXCommon::CompileShader(const std::wstring& filePath, const wchar_t* profile)
@@ -514,57 +503,6 @@ ID3D12Resource* DirectXCommon::GetCurrentBackBufferResource()
 {
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
     return swapChainResoures_[backBufferIndex].Get();
-}
-
-void DirectXCommon::CreateRenderTexture(UINT width, UINT height, DXGI_FORMAT format, const float* clearColor, SrvManager* srvManager)
-{
-    renderTextureClearColor_[0] = clearColor[0];
-    renderTextureClearColor_[1] = clearColor[1];
-    renderTextureClearColor_[2] = clearColor[2];
-    renderTextureClearColor_[3] = clearColor[3];
-
-    // リソース作成（UNORMでリソースを確保し、RTV/SRVはSRGBビューを使う）
-    D3D12_RESOURCE_DESC desc = {};
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Width = width;
-    desc.Height = height;
-    desc.DepthOrArraySize = 1;
-    desc.MipLevels = 1;
-    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    desc.SampleDesc.Count = 1;
-    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-
-    D3D12_HEAP_PROPERTIES heapProps = {};
-    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-    D3D12_CLEAR_VALUE clearValue = {};
-    clearValue.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // リソースフォーマットに合わせる
-    clearValue.Color[0] = clearColor[0];
-    clearValue.Color[1] = clearColor[1];
-    clearValue.Color[2] = clearColor[2];
-    clearValue.Color[3] = clearColor[3];
-
-    HRESULT hr = device_->CreateCommittedResource(
-        &heapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &desc,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        &clearValue,
-        IID_PPV_ARGS(&renderTextureResource_));
-    assert(SUCCEEDED(hr));
-
-    // RTV作成
-    renderTextureRtvHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1, false);
-    renderTextureRtvHandle_ = renderTextureRtvHeap_->GetCPUDescriptorHandleForHeapStart();
-
-    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-    rtvDesc.Format = format;
-    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-    device_->CreateRenderTargetView(renderTextureResource_.Get(), &rtvDesc, renderTextureRtvHandle_);
-
-    // SRV作成
-    renderTextureSrvIndex_ = srvManager->Allocate();
-    srvManager->CreateSRVforTexture2D(renderTextureSrvIndex_, renderTextureResource_.Get(), format, 1);
 }
 
 // ヘルパー関数（バッファ作成用）

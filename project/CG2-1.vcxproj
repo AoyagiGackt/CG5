@@ -214,6 +214,7 @@
     <ClCompile Include="engin\graphics\cpp\SrvManager.cpp" />
     <ClCompile Include="engin\graphics\cpp\ParticleManager.cpp" />
     <ClCompile Include="engin\graphics\cpp\ParticleEmitter.cpp" />
+    <ClCompile Include="engin\graphics\cpp\PostProcessPass.cpp" />
     <ClCompile Include="engin\graphics\cpp\VideoPlayer.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -326,6 +327,7 @@
     <ClInclude Include="engin\game\h\Input.h" />
     <ClInclude Include="engin\game\h\StringUtlity.h" />
     <ClInclude Include="engin\graphics\h\ImGuiManager.h" />
+    <ClInclude Include="engin\graphics\h\PostProcessPass.h" />
     <ClInclude Include="engin\graphics\h\SpriteCommon.h" />
     <ClInclude Include="engin\graphics\h\Sprite.h" />
     <ClInclude Include="engin\graphics\h\TextureManager.h" />

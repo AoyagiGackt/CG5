@@ -3,24 +3,35 @@
 
 using namespace Microsoft::WRL;
 
+PostProcessPass* PostProcessPass::s_instance_ = nullptr;
+
 void PostProcessPass::Initialize(DirectXCommon* dxCommon)
 {
+    s_instance_ = this;
     assert(dxCommon);
     dxCommon_ = dxCommon;
     ID3D12Device* device = dxCommon_->GetDevice();
 
-    // --- ルートシグネチャ（t0: レンダーテクスチャ SRV, s0: サンプラー）---
+    // ---- ルートパラメータ ----
     D3D12_DESCRIPTOR_RANGE srvRange = {};
     srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     srvRange.NumDescriptors = 1;
     srvRange.BaseShaderRegister = 0;
     srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParam = {};
-    rootParam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParam.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParam.DescriptorTable.pDescriptorRanges = &srvRange;
-    rootParam.DescriptorTable.NumDescriptorRanges = 1;
+    D3D12_ROOT_PARAMETER rootParams[2] = {};
+
+    // slot 0: テクスチャ SRV
+    rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParams[0].DescriptorTable.pDescriptorRanges = &srvRange;
+    rootParams[0].DescriptorTable.NumDescriptorRanges = 1;
+
+    // slot 1: ビネット CBV (b0)
+    rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParams[1].Descriptor.ShaderRegister = 0;
+    rootParams[1].Descriptor.RegisterSpace = 0;
 
     D3D12_STATIC_SAMPLER_DESC sampler = {};
     sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -33,11 +44,15 @@ void PostProcessPass::Initialize(DirectXCommon* dxCommon)
     sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
-    rsDesc.NumParameters = 1;
-    rsDesc.pParameters = &rootParam;
+
+    rsDesc.NumParameters = 2;
+    rsDesc.pParameters = rootParams;
     rsDesc.NumStaticSamplers = 1;
     rsDesc.pStaticSamplers = &sampler;
-    rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+    rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
+                   D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+                   D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+                   D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     ComPtr<ID3DBlob> sigBlob, errBlob;
     HRESULT hr = D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &sigBlob, &errBlob);
@@ -45,7 +60,6 @@ void PostProcessPass::Initialize(DirectXCommon* dxCommon)
     hr = device->CreateRootSignature(0, sigBlob->GetBufferPointer(), sigBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
     assert(SUCCEEDED(hr));
 
-    // --- シェーダーコンパイル ---
     IDxcBlob* vsBlob = dxCommon_->CompileShader(L"Resources/shaders/postprocess/PostProcessVS.hlsl", L"vs_6_0");
     IDxcBlob* psBlob = dxCommon_->CompileShader(L"Resources/shaders/postprocess/PostProcessPS.hlsl", L"ps_6_0");
 
@@ -68,15 +82,40 @@ void PostProcessPass::Initialize(DirectXCommon* dxCommon)
 
     hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState_));
     assert(SUCCEEDED(hr));
+
+    // ---- ビネット定数バッファ作成 ----
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+    D3D12_RESOURCE_DESC cbDesc = {};
+    cbDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    cbDesc.Width     = (sizeof(VignetteParams) + 255) & ~255;
+    cbDesc.Height    = 1;
+    cbDesc.DepthOrArraySize = 1;
+    cbDesc.MipLevels = 1;
+    cbDesc.SampleDesc.Count = 1;
+    cbDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+    hr = device->CreateCommittedResource(
+        &heapProps, D3D12_HEAP_FLAG_NONE,
+        &cbDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr, IID_PPV_ARGS(&vignetteCB_));
+    assert(SUCCEEDED(hr));
+
+    vignetteCB_->Map(0, nullptr, reinterpret_cast<void**>(&vignetteMapped_));
+    *vignetteMapped_ = vignetteParams_;
 }
 
 void PostProcessPass::Draw(ID3D12GraphicsCommandList* commandList, SrvManager* srvManager, uint32_t srvIndex)
 {
+    *vignetteMapped_ = vignetteParams_;
+
     ID3D12DescriptorHeap* heaps[] = { srvManager->GetSrvDescriptorHeap() };
     commandList->SetDescriptorHeaps(1, heaps);
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(pipelineState_.Get());
     commandList->SetGraphicsRootDescriptorTable(0, srvManager->GetGPUDescriptorHandle(srvIndex));
+    commandList->SetGraphicsRootConstantBufferView(1, vignetteCB_->GetGPUVirtualAddress());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commandList->DrawInstanced(3, 1, 0, 0);
 }

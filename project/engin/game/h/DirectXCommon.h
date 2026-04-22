@@ -44,17 +44,25 @@ public: // メンバ関数
 
     /**
      * @brief 描画後処理
-     * @note ポストプロセスをスワップチェーンに描画する。終了後もスワップチェーンはRenderTarget状態のままにする。
      * オーバーレイ描画（ImGui等）の後に EndDraw() を呼ぶこと。
      */
     void PostDraw();
 
     /**
      * @brief 描画終了処理
-     * @note スワップチェーンをPresent状態に遷移させ、コマンド実行・画面Flip・GPU同期を行う。
-     * PostDraw() → オーバーレイ描画 → EndDraw() の順で呼ぶこと。
      */
     void EndDraw();
+
+    /**
+     * @brief レンダーテクスチャを生成する（RTV・SRVも同時に作成）
+     */
+    void CreateRenderTexture(UINT width, UINT height, DXGI_FORMAT format, const float* clearColor, SrvManager* srvManager);
+
+    /** @brief レンダーテクスチャのSRVインデックスを取得 */
+    uint32_t GetRenderTextureSrvIndex() const { return renderTextureSrvIndex_; }
+
+    /** @brief ポストプロセスパスをセットする */
+    void SetPostProcessPass(PostProcessPass* pass) { postProcessPass_ = pass; }
 
     /**
      * @brief シェーダーファイルをコンパイルする
@@ -213,6 +221,13 @@ private:
 
     // FPS固定用
     std::chrono::steady_clock::time_point reference_;
+
+    // RenderTexture
+    Microsoft::WRL::ComPtr<ID3D12Resource> renderTextureResource_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> renderTextureRtvHeap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTextureRtvHandle_ = {};
+    uint32_t renderTextureSrvIndex_ = 0;
+    float renderTextureClearColor_[4] = {};
 
     WinApp* winApp_ = nullptr;
 
