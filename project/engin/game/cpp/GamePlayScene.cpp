@@ -1082,7 +1082,7 @@ void GamePlayScene::DrawShadowPass()
 
     shadowManager_->EndShadowPass(commandList);
 
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv = dxCommon_->GetCurrentBackBufferHandle();
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv = dxCommon_->GetRenderTextureRtvHandle();
     D3D12_CPU_DESCRIPTOR_HANDLE dsv = dxCommon_->GetDsvHandle();
     commandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
     D3D12_VIEWPORT vp = { 0, 0, 1280.0f, 720.0f, 0.0f, 1.0f };
@@ -1100,8 +1100,7 @@ void GamePlayScene::Draw()
     objectCommon_->SetDefaultLight(dxCommon_->GetCommandList());
     shadowManager_->SetShadowMap(dxCommon_->GetCommandList(), SrvManager::GetInstance());
 
-    // 天球（最初に描画して他のオブジェクトの背景とする）
-    skydome_->Draw();
+
 
     objectHuman_->Draw();
     enemyManager_->Draw();

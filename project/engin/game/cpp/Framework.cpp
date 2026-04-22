@@ -32,6 +32,16 @@ void Framework::Initialize()
     dxCommon_->Initialize(winApp_.get());
 
     SrvManager::GetInstance()->Initialize(dxCommon_.get());
+
+    {
+        float clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
+        dxCommon_->CreateRenderTexture(
+            winApp_->kClientWidth, winApp_->kClientHeight,
+            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+            clearColor,
+            SrvManager::GetInstance());
+    }
+
     TextureManager::GetInstance()->Initialize(dxCommon_.get());
     ParticleManager::GetInstance()->Initialize(dxCommon_.get());
 
