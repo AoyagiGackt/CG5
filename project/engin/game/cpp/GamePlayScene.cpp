@@ -3,6 +3,7 @@
 #include <commdlg.h>
 #include <fstream>
 #include <sstream>
+#include "PostProcessPass.h"
 #pragma comment(lib, "comdlg32.lib")
 #include "EnemyDeathEffect.h"
 #include "ImguiManager.h"
@@ -701,6 +702,16 @@ void GamePlayScene::UpdateDebugUI()
         
         if (ImGui::Button("Game Over")) {
             SceneManager::GetInstance()->ChangeScene("GAMEOVER");
+        }
+    }
+
+    // ビネット
+    if (ImGui::CollapsingHeader("Vignette")) {
+        PostProcessPass* pp = PostProcessPass::GetInstance();
+        if (pp) {
+            VignetteParams& vp = pp->GetVignetteParams();
+            ImGui::SliderFloat("Intensity", &vp.intensity, 0.0f, 4.0f);
+            ImGui::SliderFloat("Power",     &vp.power,     0.1f, 5.0f);
         }
     }
 

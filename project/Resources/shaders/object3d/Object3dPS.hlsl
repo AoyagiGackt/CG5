@@ -15,12 +15,12 @@ struct Material
     int      enableLighting;
     int      shadingType;    // 0:Lambert  1:HalfLambert
     int      useCubemap;     // 1:キューブマップサンプリング（天球用）
-    int      useTexture;     // 0:テクスチャ色なし（白=1,1,1,1 として扱う）
+    float    padding;
     float4x4 uvTransform;
     float3   specularColor;
     float    shininess;
     float3   cameraWorldPos;
-    float    envMapIntensity; // 環境マップ反射強度（0=なし, 1=フル反射）
+    float    matPad;
 };
 ConstantBuffer<Material> gMaterial : register(b0);
 
@@ -104,14 +104,10 @@ PixelShaderOutput main(VertexShaderOutput input)
         hdr = hdr / (hdr + 1.0f);
         textureColor = float4(hdr, 1.0f);
     }
-    else if (gMaterial.useTexture != 0)
+    else
     {
         float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
         textureColor = gTexture.Sample(gSampler, transformedUV.xy);
-    }
-    else
-    {
-        textureColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
     }
     float4 baseColor = gMaterial.color * textureColor;
 
@@ -152,31 +148,8 @@ PixelShaderOutput main(VertexShaderOutput input)
         // ----- シャドウ係数（PCF）-----
         float shadowFactor = GetShadowFactor(input.lightSpacePos);
 
-        // ----- 環境マップ反射（金属感）-----
-        // envMapIntensity=0 → 通常 Blinn-Phong
-        // envMapIntensity=1 → diffuse を env 反射で完全置換（金属）
-        float3 litColor;
-        if (gMaterial.envMapIntensity > 0.0f)
-        {
-            float3 R        = reflect(-V, N);
-            float3 envColor = gCubemap.Sample(gSampler, R).rgb;
-            envColor = envColor / (envColor + 1.0f); // Reinhard トーンマッピング
-
-            // 金属: env 反射をマテリアル色でティント、diffuse なし
-            float3 metalDiffuse = envColor * gMaterial.color.rgb;
-            float3 metalAmbient = gMaterial.color.rgb * gDirectionalLight.ambientColor * gDirectionalLight.ambientIntensity;
-
-            float3 normalLit = (diffuseColor + specularColor) * shadowFactor + ambient;
-            float3 metalLit  = (metalDiffuse  + specularColor) * shadowFactor + metalAmbient;
-
-            litColor = lerp(normalLit, metalLit, gMaterial.envMapIntensity);
-        }
-        else
-        {
-            litColor = (diffuseColor + specularColor) * shadowFactor + ambient;
-        }
-
-        output.color.rgb = litColor;
+        // ----- 合成（影はDiffuse/Specularに掛ける、Ambientは影でも残る）-----
+        output.color.rgb = (diffuseColor + specularColor) * shadowFactor + ambient;
         output.color.a   = gMaterial.color.a * textureColor.a;
     }
     else
