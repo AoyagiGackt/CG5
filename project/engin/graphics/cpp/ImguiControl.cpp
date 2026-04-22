@@ -4,7 +4,6 @@
 #include "MaterialManager.h"
 #include "MeshManager.h"
 #include "LightManager.h"
-#include "PostProcessPass.h"
 
 void ShowControls()
 {
@@ -53,16 +52,6 @@ void ShowControls()
         // ImGuiで値が変更されたら、マネージャーにセットし直す
         if (ImGui::Combo("Lighting Mode", &currentMode, lightItems, IM_ARRAYSIZE(lightItems))) {
             LightManager::GetInstance()->SetLightingMode(currentMode);
-        }
-    }
-
-    // ビネット設定
-    if (ImGui::CollapsingHeader("Post Process Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-        PostProcessPass* pp = PostProcessPass::GetInstance();
-        if (pp) {
-            VignetteParams& vp = pp->GetVignetteParams();
-            ImGui::SliderFloat("Vignette Intensity", &vp.intensity, 0.0f, 4.0f);
-            ImGui::SliderFloat("Vignette Power",     &vp.power,     0.1f, 5.0f);
         }
     }
 

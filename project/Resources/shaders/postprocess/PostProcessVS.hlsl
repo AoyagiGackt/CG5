@@ -4,6 +4,7 @@ struct VSOutput
     float2 uv  : TEXCOORD0;
 };
 
+// SV_VertexID だけで画面全体を覆う三角形を1枚生成する
 VSOutput main(uint vid : SV_VertexID)
 {
     float2 uv = float2((vid << 1) & 2, vid & 2);
