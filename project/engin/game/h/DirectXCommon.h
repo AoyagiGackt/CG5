@@ -14,6 +14,7 @@
 #include <wrl/client.h>
 
 class WinApp;
+class SrvManager;
 
 /**
  * @brief DirectX12の共通基盤クラス
@@ -79,6 +80,16 @@ public: // メンバ関数
      */
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(size_t sizeInBytes);
 
+    /**
+     * @brief レンダーテクスチャを生成する（RTV・SRVも同時に作成）
+     * @param width テクスチャ幅
+     * @param height テクスチャ高さ
+     * @param format RTVおよびSRVのフォーマット
+     * @param clearColor クリアカラー（RGBA, 4要素）
+     * @param srvManager SRV確保に使用するSrvManagerのポインタ
+     */
+    void CreateRenderTexture(UINT width, UINT height, DXGI_FORMAT format, const float* clearColor, SrvManager* srvManager);
+
     // --- RTV関連 ---
 
     /** @brief 現在のバックバッファのRTVハンドルを取得 */
@@ -95,6 +106,17 @@ public: // メンバ関数
 
     /** @brief DSV（深度バッファ）のハンドルを取得 */
     D3D12_CPU_DESCRIPTOR_HANDLE GetDsvHandle() { return dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart(); }
+
+    // --- RenderTexture関連 ---
+
+    /** @brief レンダーテクスチャのRTVハンドルを取得 */
+    D3D12_CPU_DESCRIPTOR_HANDLE GetRenderTextureRtvHandle() const { return renderTextureRtvHandle_; }
+
+    /** @brief レンダーテクスチャのリソースを取得 */
+    ID3D12Resource* GetRenderTextureResource() { return renderTextureResource_.Get(); }
+
+    /** @brief レンダーテクスチャのSRVインデックスを取得 */
+    uint32_t GetRenderTextureSrvIndex() const { return renderTextureSrvIndex_; }
 
     // --- フェンス関連 ---
 
@@ -159,6 +181,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> swapChainResoures_[2];
     Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource_;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
+
+    // RenderTexture
+    Microsoft::WRL::ComPtr<ID3D12Resource> renderTextureResource_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> renderTextureRtvHeap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTextureRtvHandle_ = {};
+    uint32_t renderTextureSrvIndex_ = 0;
+    float renderTextureClearColor_[4] = {};
 
     // DXC (Shader Compiler)
     Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
