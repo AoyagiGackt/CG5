@@ -205,6 +205,7 @@
     <ClCompile Include="engin\graphics\cpp\Sprite.cpp" />
     <ClCompile Include="engin\graphics\cpp\TextureManager.cpp" />
     <ClCompile Include="engin\graphics\cpp\Object3dCommon.cpp" />
+    <ClCompile Include="engin\graphics\cpp\PostProcessPass.cpp" />
     <ClCompile Include="engin\graphics\cpp\ShadowManager.cpp" />
     <ClCompile Include="engin\graphics\cpp\Model.cpp" />
     <ClCompile Include="engin\graphics\cpp\Object3d.cpp" />
@@ -331,6 +332,7 @@
     <ClInclude Include="engin\graphics\h\Sprite.h" />
     <ClInclude Include="engin\graphics\h\TextureManager.h" />
     <ClInclude Include="engin\graphics\h\Object3dCommon.h" />
+    <ClInclude Include="engin\graphics\h\PostProcessPass.h" />
     <ClInclude Include="engin\graphics\h\ShadowManager.h" />
     <ClInclude Include="engin\graphics\h\Model.h" />
     <ClInclude Include="engin\graphics\h\Object3d.h" />

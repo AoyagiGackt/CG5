@@ -44,14 +44,12 @@ public: // メンバ関数
 
     /**
      * @brief 描画後処理
-     * @note ポストプロセスをスワップチェーンに描画する。スワップチェーンはRenderTarget状態のまま維持する。
      * オーバーレイ描画（ImGui等）の後に EndDraw() を呼ぶこと。
      */
     void PostDraw();
 
     /**
      * @brief 描画終了処理
-     * @note スワップチェーンをPresent状態に遷移させ、コマンド実行・Flip・GPU同期を行う。
      */
     void EndDraw();
 
@@ -99,6 +97,16 @@ public: // メンバ関数
      */
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(size_t sizeInBytes);
 
+    /**
+     * @brief レンダーテクスチャを生成する（RTV・SRVも同時に作成）
+     * @param width テクスチャ幅
+     * @param height テクスチャ高さ
+     * @param format RTVおよびSRVのフォーマット
+     * @param clearColor クリアカラー（RGBA, 4要素）
+     * @param srvManager SRV確保に使用するSrvManagerのポインタ
+     */
+    void CreateRenderTexture(UINT width, UINT height, DXGI_FORMAT format, const float* clearColor, SrvManager* srvManager);
+
     // --- RTV関連 ---
 
     /** @brief 現在のバックバッファのRTVハンドルを取得 */
@@ -116,6 +124,17 @@ public: // メンバ関数
     /** @brief DSV（深度バッファ）のハンドルを取得 */
     D3D12_CPU_DESCRIPTOR_HANDLE GetDsvHandle() { return dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart(); }
 
+    // --- RenderTexture関連 ---
+
+    /** @brief レンダーテクスチャのRTVハンドルを取得 */
+    D3D12_CPU_DESCRIPTOR_HANDLE GetRenderTextureRtvHandle() const { return renderTextureRtvHandle_; }
+
+    /** @brief レンダーテクスチャのリソースを取得 */
+    ID3D12Resource* GetRenderTextureResource() { return renderTextureResource_.Get(); }
+
+    /** @brief レンダーテクスチャのSRVインデックスを取得 */
+    uint32_t GetRenderTextureSrvIndex() const { return renderTextureSrvIndex_; }
+
     // --- フェンス関連 ---
 
     /** @brief フェンスの取得 */
@@ -129,6 +148,9 @@ public: // メンバ関数
 
     /** @brief フェンス値をインクリメントする */
     void IncrementFenceValue() { fenceValue_++; }
+
+    /** @brief ポストプロセスパスをセットする（nullptr でパススルー CopyResource に戻る） */
+    void SetPostProcessPass(PostProcessPass* pass) { postProcessPass_ = pass; }
 
 private:
     // 内部初期化関数群
@@ -180,6 +202,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource_;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
 
+    // RenderTexture
+    Microsoft::WRL::ComPtr<ID3D12Resource> renderTextureResource_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> renderTextureRtvHeap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTextureRtvHandle_ = {};
+    uint32_t renderTextureSrvIndex_ = 0;
+    float renderTextureClearColor_[4] = {};
+
     // DXC (Shader Compiler)
     Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
     Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
@@ -201,5 +230,6 @@ private:
     float renderTextureClearColor_[4] = {};
 
     WinApp* winApp_ = nullptr;
+
     PostProcessPass* postProcessPass_ = nullptr;
 };

@@ -8,7 +8,6 @@ PostProcessPass* PostProcessPass::s_instance_ = nullptr;
 void PostProcessPass::Initialize(DirectXCommon* dxCommon)
 {
     s_instance_ = this;
-
     assert(dxCommon);
     dxCommon_ = dxCommon;
     ID3D12Device* device = dxCommon_->GetDevice();
@@ -45,6 +44,7 @@ void PostProcessPass::Initialize(DirectXCommon* dxCommon)
     sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
+
     rsDesc.NumParameters = 2;
     rsDesc.pParameters = rootParams;
     rsDesc.NumStaticSamplers = 1;
@@ -63,6 +63,7 @@ void PostProcessPass::Initialize(DirectXCommon* dxCommon)
     IDxcBlob* vsBlob = dxCommon_->CompileShader(L"Resources/shaders/postprocess/PostProcessVS.hlsl", L"vs_6_0");
     IDxcBlob* psBlob = dxCommon_->CompileShader(L"Resources/shaders/postprocess/PostProcessPS.hlsl", L"ps_6_0");
 
+    // --- PSO ---
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = rootSignature_.Get();
     psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
