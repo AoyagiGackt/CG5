@@ -15,6 +15,7 @@
 
 class WinApp;
 class SrvManager;
+class PostProcessPass;
 
 /**
  * @brief DirectX12の共通基盤クラス
@@ -132,6 +133,9 @@ public: // メンバ関数
     /** @brief フェンス値をインクリメントする */
     void IncrementFenceValue() { fenceValue_++; }
 
+    /** @brief ポストプロセスパスをセットする（nullptr でパススルー CopyResource に戻る） */
+    void SetPostProcessPass(PostProcessPass* pass) { postProcessPass_ = pass; }
+
 private:
     // 内部初期化関数群
 
@@ -203,4 +207,6 @@ private:
     std::chrono::steady_clock::time_point reference_;
 
     WinApp* winApp_ = nullptr;
+
+    PostProcessPass* postProcessPass_ = nullptr;
 };
