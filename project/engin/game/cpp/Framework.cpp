@@ -3,6 +3,7 @@
 #include "MeshManager.h"
 #include "MaterialManager.h"
 #include "LightingMode.h"
+#include "PostProcessPass.h"
 #include "TextureManager.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
@@ -32,6 +33,20 @@ void Framework::Initialize()
     dxCommon_->Initialize(winApp_.get());
 
     SrvManager::GetInstance()->Initialize(dxCommon_.get());
+
+    {
+        float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
+        dxCommon_->CreateRenderTexture(
+            winApp_->kClientWidth, winApp_->kClientHeight,
+            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+            clearColor,
+            SrvManager::GetInstance());
+    }
+
+    postProcessPass_ = std::make_unique<PostProcessPass>();
+    postProcessPass_->Initialize(dxCommon_.get());
+    dxCommon_->SetPostProcessPass(postProcessPass_.get());
+
     TextureManager::GetInstance()->Initialize(dxCommon_.get());
     ParticleManager::GetInstance()->Initialize(dxCommon_.get());
 

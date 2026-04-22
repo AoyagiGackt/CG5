@@ -16,6 +16,12 @@
     <FxCompile Include="Resources\shaders\object3d\ShadowVS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
+    <FxCompile Include="Resources\shaders\postprocess\PostProcessPS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Resources\shaders\postprocess\PostProcessVS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="engin\base\main.cpp">
@@ -191,6 +197,9 @@
     </ClCompile>
     <ClCompile Include="engin\game\cpp\LoadingScene.cpp">
       <Filter>ソースファイル\Game\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="engin\graphics\cpp\PostProcessPass.cpp">
+      <Filter>ソースファイル\Engine\Manager</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -385,6 +394,9 @@
     </ClInclude>
     <ClInclude Include="engin\game\h\LoadingScene.h">
       <Filter>ヘッダーファイル\Game\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="engin\graphics\h\PostProcessPass.h">
+      <Filter>ヘッダーファイル\Engine\Manager</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

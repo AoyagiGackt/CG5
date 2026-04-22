@@ -8,6 +8,7 @@
 #include <memory>
 
 // 基盤系
+#include "PostProcessPass.h"
 #include "Audio.h"
 #include "DirectXCommon.h"
 #include "ImGuiManager.h"
@@ -107,4 +108,7 @@ protected:
 
     /** @brief 終了リクエストフラグ */
     bool endRequest_ = false;
+
+    /** @brief ポストプロセスパス */
+    std::unique_ptr<PostProcessPass> postProcessPass_;
 };
